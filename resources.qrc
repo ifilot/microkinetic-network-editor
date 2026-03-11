@@ -1,0 +1,13 @@
+<RCC>
+    <qresource prefix="/icons">
+        <file alias="mng-icon.png">assets/icons/mng-icon.png</file>
+        <file alias="mng-icon-256px.png">assets/icons/mng-icon-256px.png</file>
+        <file alias="mng-icon-512px.png">assets/icons/mng-icon-512px.png</file>
+    </qresource>
+    <qresource prefix="/shaders">
+        <file alias="gui.vert">assets/shaders/gui.vert</file>
+        <file alias="gui.frag">assets/shaders/gui.frag</file>
+        <file alias="text.vert">assets/shaders/text.vert</file>
+        <file alias="text.frag">assets/shaders/text.frag</file>
+    </qresource>
+</RCC>

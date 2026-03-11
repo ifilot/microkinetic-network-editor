@@ -1,0 +1,79 @@
+pymkmkit:
+  version: 0.1.0
+  units: eV
+  energy_type: elec+zpe
+nodes:
+- label: empty
+- label: CO*
+- label: CO2_1Vo*
+- label: 1Vo
+- label: O2_1Vo*
+- label: O*
+- label: CO_O*
+- label: CO2*
+- label: OCOO_1Vo*
+edges:
+- name: CO adsorption
+  type: ads
+  nodes:
+  - empty
+  - CO*
+  ads: -1.4380982624381247
+- name: CO oxidation via Mars-van-Krevelen
+  type: surf
+  nodes:
+  - CO*
+  - CO2_1Vo*
+  forward: 0.7071088811861611
+  backward: 0.8133729731592205
+- name: CO2 desorption from CO2*+1Vo
+  type: ads
+  nodes:
+  - 1Vo
+  - CO2_1Vo*
+  ads: -1.1109024334155797
+- name: O2 adsorption on 1Vo
+  type: ads
+  nodes:
+  - 1Vo
+  - O2_1Vo*
+  ads: -2.0336264911842847
+- name: O2 dissociation via MvK1, healing the vacancy
+  type: surf
+  nodes:
+  - O2_1Vo*
+  - O*
+  forward: 0.34853382376864755
+  backward: 1.5809307100604222
+- name: CO + O co-adsorption via LH2 pathway
+  type: ads
+  nodes:
+  - O*
+  - CO_O*
+  ads: -1.2503862856869317
+- name: CO oxidation via LH2 pathway
+  type: surf
+  nodes:
+  - CO_O*
+  - CO2*
+  forward: 0.4169083526804126
+  backward: 1.8809067714441168
+- name: CO2 adsorption
+  type: ads
+  nodes:
+  - empty
+  - CO2*
+  ads: -0.13556635194923222
+- name: CO+O co-adsorption forming OCOO in MvK1 pathway
+  type: ads
+  nodes:
+  - O2_1Vo*
+  - OCOO_1Vo*
+  ads: -0.2525526584647491
+- name: OCOO dissociation via MvK1
+  type: surf
+  nodes:
+  - OCOO_1Vo*
+  - CO2*
+  forward: -0.2836076712415137
+  backward: 3.4106212610359203
