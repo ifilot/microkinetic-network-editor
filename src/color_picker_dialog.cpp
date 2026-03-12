@@ -127,8 +127,7 @@ ColorPickerDialog::ColorPickerDialog(const QColor& initial, QWidget* parent)
     valueSlider_ = new QSlider(Qt::Vertical, this);
     valueSlider_->setRange(0, 100);
     valueSlider_->setFixedWidth(22);
-    valueSlider_->setMinimumHeight(200);
-    valueSlider_->setMaximumHeight(500);
+    valueSlider_->setFixedHeight(wheel_->sizeHint().height());
     center->addWidget(valueSlider_, 0, Qt::AlignTop);
     left_panel->addLayout(center);
 

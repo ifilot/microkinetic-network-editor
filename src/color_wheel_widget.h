@@ -31,6 +31,8 @@ public:
 
     void setColor(const QColor& c);
     QColor color() const;
+    QSize sizeHint() const override;
+    QSize minimumSizeHint() const override;
 
 signals:
     void colorChanged(const QColor& color);
