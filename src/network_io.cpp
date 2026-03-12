@@ -27,6 +27,8 @@
 
 #include <QString>
 
+#include <cmath>
+#include <algorithm>
 #include <exception>
 #include <fstream>
 #include <unordered_map>
@@ -36,12 +38,53 @@ namespace {
 constexpr float kGridSpacing = 140.0f;
 constexpr int kGridColumns = 4;
 
-void assign_default_positions(NetworkData& data) {
+bool overlaps_existing_node(float x, float y, const std::vector<NodeData>& nodes, float minimum_distance_squared) {
+    for (const NodeData& node : nodes) {
+        const float dx = x - node.x;
+        const float dy = y - node.y;
+        const float distance_squared = dx * dx + dy * dy;
+        if (distance_squared < minimum_distance_squared) {
+            return true;
+        }
+    }
+    return false;
+}
+
+void assign_default_positions(NetworkData& data, const std::vector<bool>& has_position, float node_radius) {
+    std::vector<NodeData> placed_nodes;
+    placed_nodes.reserve(data.nodes.size());
+
     for (size_t i = 0; i < data.nodes.size(); ++i) {
-        const int col = static_cast<int>(i % kGridColumns);
-        const int row = static_cast<int>(i / kGridColumns);
-        data.nodes[i].x = 100.0f + static_cast<float>(col) * kGridSpacing;
-        data.nodes[i].y = 100.0f + static_cast<float>(row) * kGridSpacing;
+        if (has_position[i]) {
+            placed_nodes.push_back(data.nodes[i]);
+        }
+    }
+
+    const float minimum_distance = std::max(2.0f * node_radius, 1.0f);
+    const float minimum_distance_squared = minimum_distance * minimum_distance;
+
+    size_t next_slot = 0;
+    for (size_t i = 0; i < data.nodes.size(); ++i) {
+        if (has_position[i]) {
+            continue;
+        }
+
+        while (true) {
+            const int col = static_cast<int>(next_slot % kGridColumns);
+            const int row = static_cast<int>(next_slot / kGridColumns);
+            const float x = 100.0f + static_cast<float>(col) * kGridSpacing;
+            const float y = 100.0f + static_cast<float>(row) * kGridSpacing;
+            ++next_slot;
+
+            if (overlaps_existing_node(x, y, placed_nodes, minimum_distance_squared)) {
+                continue;
+            }
+
+            data.nodes[i].x = x;
+            data.nodes[i].y = y;
+            placed_nodes.push_back(data.nodes[i]);
+            break;
+        }
     }
 }
 
@@ -119,7 +162,12 @@ bool load_network_yaml(const QString& path, NetworkData& out_data, QString& erro
 
         NetworkData data;
         std::unordered_map<std::string, int> index_by_label;
-        bool has_all_positions = true;
+        std::vector<bool> has_position;
+        has_position.reserve(node_list.size());
+
+        YAML::Node settings = root["settings"];
+        const float node_radius = (settings && settings.IsMap() && settings["node_radius"]) ?
+            settings["node_radius"].as<float>() : data.settings.node_radius;
 
         for (size_t i = 0; i < node_list.size(); ++i) {
             const YAML::Node yaml_node = node_list[i];
@@ -138,8 +186,9 @@ bool load_network_yaml(const QString& path, NetworkData& out_data, QString& erro
                 map_child(map_child(yaml_node, "position"), "x") && map_child(map_child(yaml_node, "position"), "y")) {
                 node.x = map_child(map_child(yaml_node, "position"), "x").as<float>();
                 node.y = map_child(map_child(yaml_node, "position"), "y").as<float>();
+                has_position.push_back(true);
             } else {
-                has_all_positions = false;
+                has_position.push_back(false);
             }
 
             index_by_label[node.label.toStdString()] = static_cast<int>(data.nodes.size());
@@ -188,11 +237,8 @@ bool load_network_yaml(const QString& path, NetworkData& out_data, QString& erro
             data.edges.push_back(edge_data);
         }
 
-        if (!has_all_positions) {
-            assign_default_positions(data);
-        }
+        assign_default_positions(data, has_position, node_radius);
 
-        YAML::Node settings = root["settings"];
         if (settings && settings.IsMap()) {
             data.settings.node_radius = settings["node_radius"] ? settings["node_radius"].as<float>() : data.settings.node_radius;
             data.settings.line_thickness = settings["line_thickness"] ? settings["line_thickness"].as<float>() : data.settings.line_thickness;

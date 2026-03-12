@@ -1,0 +1,231 @@
+nodes:
+  - label: empty
+    position:
+      x: 700
+      y: 100
+  - label: CO*
+    position:
+      x: 500
+      y: 100
+  - label: CO2_1Vo*
+    position:
+      x: 300
+      y: 100
+  - label: 1Vo
+    position:
+      x: 100
+      y: 100
+  - label: O2_1Vo*
+    position:
+      x: 100
+      y: 400
+  - label: O*
+    position:
+      x: 600
+      y: 400
+  - label: CO_O*
+    position:
+      x: 600
+      y: 300
+  - label: CO2*
+    position:
+      x: 700
+      y: 200
+  - label: OCOO_1Vo*
+    position:
+      x: 400
+      y: 300
+  - label: OCOO*
+    position:
+      x: 900
+      y: 200
+  - label: O2*
+    position:
+      x: 900
+      y: 100
+  - label: CO2_O*
+    position:
+      x: 900
+      y: 300
+  - label: 2O*
+    position:
+      x: 1100
+      y: 100
+  - label: CO_2O*
+    position:
+      x: 1100
+      y: 300
+  - label: 1Vo_sub
+    position:
+      x: 100
+      y: -100
+  - label: CO_1Vo_sub*
+    position:
+      x: 200
+      y: -100
+  - label: CO2_2Vo*
+    position:
+      x: 300
+      y: -100
+  - label: 2Vo
+    position:
+      x: 500
+      y: -100
+  - label: O2_2Vo*
+    position:
+      x: 700
+      y: -100
+edges:
+  - nodes:
+      - empty
+      - CO*
+    values:
+      - 0
+      - 1.438098262438125
+  - nodes:
+      - CO*
+      - CO2_1Vo*
+    values:
+      - 0.7071088811861611
+      - 0.8133729731592205
+  - nodes:
+      - 1Vo
+      - CO2_1Vo*
+    values:
+      - 0
+      - 1.11090243341558
+  - nodes:
+      - 1Vo
+      - O2_1Vo*
+    values:
+      - 0
+      - 2.033626491184285
+  - nodes:
+      - O2_1Vo*
+      - O*
+    values:
+      - 0.34853382376864755
+      - 1.5809307100604222
+  - nodes:
+      - O*
+      - CO_O*
+    values:
+      - 0
+      - 1.250386285686932
+  - nodes:
+      - CO_O*
+      - CO2*
+    values:
+      - 0.4169083526804126
+      - 1.8809067714441168
+  - nodes:
+      - empty
+      - CO2*
+    values:
+      - 0
+      - 0.1355663519492322
+  - nodes:
+      - O2_1Vo*
+      - OCOO_1Vo*
+    values:
+      - 0
+      - 0.2525526584647491
+  - nodes:
+      - OCOO_1Vo*
+      - CO2*
+    values:
+      - -0.2836076712415137
+      - 3.4106212610359203
+  - nodes:
+      - empty
+      - O2*
+    values:
+      - 0
+      - 0.8488266608031665
+  - nodes:
+      - O2*
+      - OCOO*
+    values:
+      - 0
+      - 1.13910145450456
+  - nodes:
+      - OCOO*
+      - CO2_O*
+    values:
+      - 0.6597302606769675
+      - 2.755980581201544
+  - nodes:
+      - O*
+      - CO2_O*
+    values:
+      - 0
+      - 0.3846951373604123
+  - nodes:
+      - O2*
+      - 2O*
+    values:
+      - 1.3301311494709018
+      - 1.8387464754097185
+  - nodes:
+      - 2O*
+      - CO_2O*
+    values:
+      - 0
+      - 0.9796320634225392
+  - nodes:
+      - CO_2O*
+      - CO2_O*
+    values:
+      - -1.747104385667781
+      - 1.747104385667781
+  - nodes:
+      - 1Vo
+      - 1Vo_sub
+    values:
+      - -0.2419478346644279
+      - 0.2419478346644279
+  - nodes:
+      - 1Vo_sub
+      - CO_1Vo_sub*
+    values:
+      - 0
+      - 1.513160277834301
+  - nodes:
+      - CO_1Vo_sub*
+      - CO2_2Vo*
+    values:
+      - 0.9438865183190432
+      - 0.41268265239546903
+  - nodes:
+      - 2Vo
+      - CO2_2Vo*
+    values:
+      - 0
+      - 0.8989679414671117
+  - nodes:
+      - 2Vo
+      - O2_2Vo*
+    values:
+      - 0
+      - 2.466226491446826
+  - nodes:
+      - O2_2Vo*
+      - empty
+    values:
+      - -3.053678933422139
+      - 3.053678933422139
+settings:
+  node_radius: 10
+  line_thickness: 5
+  node_outline_thickness: 3
+  font_size: 12
+  label_angle_degrees: -35
+  node_label_distance: 5
+  font_family: Bahnschrift SemiBold
+  background_color: "#fdf6e3"
+  node_fill_color: "#ffffff"
+  node_outline_color: "#000000"
+  line_color: "#dc322f"
+  label_color: "#000000"
+  value_decimals: 3
+  value_unit: eV
