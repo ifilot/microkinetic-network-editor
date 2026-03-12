@@ -234,7 +234,16 @@ void MainWindow::load_yaml() {
     NetworkData data;
     QString error;
     if (!load_network_yaml(file_path, data, error)) {
-        QMessageBox::critical(this, "Load failed", "Failed to load YAML:\n" + error);
+        if (error.contains("contains more than two nodes")) {
+            QMessageBox unsupported_edge_modal(this);
+            unsupported_edge_modal.setIcon(QMessageBox::Critical);
+            unsupported_edge_modal.setWindowTitle("Unsupported edge in YAML");
+            unsupported_edge_modal.setText("This YAML file contains an edge with more than two nodes.");
+            unsupported_edge_modal.setInformativeText(error + "\nPlease split multi-node edges into pairwise edges.");
+            unsupported_edge_modal.exec();
+        } else {
+            QMessageBox::critical(this, "Load failed", "Failed to load YAML:\n" + error);
+        }
         return;
     }
 

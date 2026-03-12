@@ -32,6 +32,7 @@
 #include <exception>
 #include <fstream>
 #include <unordered_map>
+#include <unordered_set>
 
 namespace {
 
@@ -165,6 +166,30 @@ bool load_network_yaml(const QString& path, NetworkData& out_data, QString& erro
         std::vector<bool> has_position;
         has_position.reserve(node_list.size());
 
+        std::unordered_set<std::string> labels_in_edges;
+        labels_in_edges.reserve(edge_list.size() * 2);
+        for (size_t i = 0; i < edge_list.size(); ++i) {
+            const YAML::Node edge = edge_list[i];
+            const YAML::Node edge_nodes = map_child(edge, "nodes");
+            if (!edge_nodes || !edge_nodes.IsSequence()) {
+                error = "An edge has an invalid 'nodes' entry (expected a sequence of two labels).";
+                return false;
+            }
+            if (edge_nodes.size() > 2) {
+                error = QString("Edge %1 contains more than two nodes (%2). Only pairwise edges are supported.")
+                    .arg(i + 1)
+                    .arg(static_cast<int>(edge_nodes.size()));
+                return false;
+            }
+            if (edge_nodes.size() < 2) {
+                error = QString("Edge %1 has fewer than two nodes.").arg(i + 1);
+                return false;
+            }
+
+            labels_in_edges.insert(edge_nodes[0].as<std::string>());
+            labels_in_edges.insert(edge_nodes[1].as<std::string>());
+        }
+
         YAML::Node settings = root["settings"];
         const float node_radius = (settings && settings.IsMap() && settings["node_radius"]) ?
             settings["node_radius"].as<float>() : data.settings.node_radius;
@@ -179,6 +204,12 @@ bool load_network_yaml(const QString& path, NetworkData& out_data, QString& erro
 
             NodeData node;
             node.label = scalar_to_qstring(label_node);
+
+            if (labels_in_edges.find(node.label.toStdString()) == labels_in_edges.end()) {
+                qWarning() << "Ignoring unconnected node with label:" << node.label;
+                continue;
+            }
+
             const QString maybe_name = scalar_to_qstring(map_child(yaml_node, "name"));
             node.name = maybe_name.isEmpty() ? node.label : maybe_name;
             node.fill_color = scalar_to_qstring(map_child(yaml_node, "fill_color")).trimmed();
@@ -200,11 +231,6 @@ bool load_network_yaml(const QString& path, NetworkData& out_data, QString& erro
         for (size_t i = 0; i < edge_list.size(); ++i) {
             const YAML::Node edge = edge_list[i];
             const YAML::Node edge_nodes = map_child(edge, "nodes");
-            if (!edge_nodes || !edge_nodes.IsSequence() || edge_nodes.size() != 2) {
-                error = "An edge has an invalid 'nodes' entry (expected two labels).";
-                return false;
-            }
-
             const std::string from_label = edge_nodes[0].as<std::string>();
             const std::string to_label = edge_nodes[1].as<std::string>();
 
