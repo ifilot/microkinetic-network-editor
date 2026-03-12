@@ -322,17 +322,18 @@ void NetworkView::draw_scene(QPainter& painter, const QRectF& world_visible_rect
                 return QLocale::c().toString(displayed, 'f', value_decimals_);
             };
 
-            const bool edge_goes_right = p2.x() > p1.x();
             const bool edge_goes_left = p2.x() < p1.x();
+            const bool edge_is_vertical = qAbs(p2.x() - p1.x()) < 1e-6;
 
             const QString forward_arrow = edge_goes_left ? "◀" : "▶";
             const QString backward_arrow = edge_goes_left ? "▶" : "◀";
             bool forward_prepend_arrow = false;
-            if (edge_goes_left) {
+            if (edge_is_vertical) {
+                // Vertical edge: always render forward as "value + arrow"
+                // and backward as "arrow + value".
+                forward_prepend_arrow = false;
+            } else if (edge_goes_left) {
                 forward_prepend_arrow = true;
-            } else if (!edge_goes_right) {
-                // Vertical edge: prepend when the end node is above the start node.
-                forward_prepend_arrow = p2.y() < p1.y();
             }
 
             auto with_arrow = [](const QString& value, const QString& arrow, bool prepend) {
@@ -359,6 +360,13 @@ void NetworkView::draw_scene(QPainter& painter, const QRectF& world_visible_rect
                 // Adsorption: keep directional cue and only display backward barrier.
                 forward_text.clear();
                 if (!backward_text.isEmpty()) {
+                    if (edge.values.size() >= 2) {
+                        double numeric_backward = 0.0;
+                        if (parse_value(edge.values[1], numeric_backward)) {
+                            const QString sign = (numeric_backward >= 0.0) ? "+" : "";
+                            backward_text = sign + backward_text;
+                        }
+                    }
                     backward_text = "|" + backward_text + "|";
                     backward_text = with_arrow(backward_text, backward_arrow, !forward_prepend_arrow);
                 }
