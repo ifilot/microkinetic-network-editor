@@ -181,6 +181,8 @@ bool load_network_yaml(const QString& path, NetworkData& out_data, QString& erro
             node.label = scalar_to_qstring(label_node);
             const QString maybe_name = scalar_to_qstring(map_child(yaml_node, "name"));
             node.name = maybe_name.isEmpty() ? node.label : maybe_name;
+            node.fill_color = scalar_to_qstring(map_child(yaml_node, "fill_color")).trimmed();
+            node.outline_color = scalar_to_qstring(map_child(yaml_node, "outline_color")).trimmed();
 
             if (map_child(yaml_node, "position") && map_child(yaml_node, "position").IsMap() &&
                 map_child(map_child(yaml_node, "position"), "x") && map_child(map_child(yaml_node, "position"), "y")) {
@@ -218,21 +220,21 @@ bool load_network_yaml(const QString& path, NetworkData& out_data, QString& erro
             edge_data.to_index = to_it->second;
             edge_data.type = scalar_to_qstring(map_child(edge, "type")).trimmed();
             edge_data.description = scalar_to_qstring(map_child(edge, "name")).trimmed();
+            edge_data.color = scalar_to_qstring(map_child(edge, "color")).trimmed();
 
-            const QString edge_type = edge_data.type.toLower();
-            if (edge_type == "ads") {
-                append_forward_backward_from_ads(map_child(edge, "ads"), edge_data.values);
-            } else if (edge_type == "surf") {
+            append_value_node(map_child(edge, "values"), edge_data.values);
+
+            if (edge_data.values.empty()) {
                 append_value_node(map_child(edge, "forward"), edge_data.values);
                 append_value_node(map_child(edge, "backward"), edge_data.values);
-            } else {
-                append_value_node(map_child(edge, "values"), edge_data.values);
-                if (edge_data.values.empty()) {
-                    append_value_node(map_child(edge, "forward"), edge_data.values);
-                    append_value_node(map_child(edge, "backward"), edge_data.values);
-                    if (edge_data.values.empty()) {
-                        append_value_node(map_child(edge, "ads"), edge_data.values);
-                    }
+            }
+
+            if (edge_data.values.empty()) {
+                const QString edge_type = edge_data.type.toLower();
+                if (edge_type == "ads") {
+                    append_forward_backward_from_ads(map_child(edge, "ads"), edge_data.values);
+                } else {
+                    append_value_node(map_child(edge, "ads"), edge_data.values);
                 }
             }
 
@@ -280,6 +282,14 @@ bool save_network_yaml(const QString& path, const NetworkData& data, QString& er
             if (!node.name.isEmpty() && node.name != node.label) {
                 node_yaml["name"] = node.name.toStdString();
             }
+            const QString effective_fill_color = node.fill_color.trimmed().isEmpty()
+                ? data.settings.node_fill_color
+                : node.fill_color.trimmed();
+            const QString effective_outline_color = node.outline_color.trimmed().isEmpty()
+                ? data.settings.node_outline_color
+                : node.outline_color.trimmed();
+            node_yaml["fill_color"] = effective_fill_color.toStdString();
+            node_yaml["outline_color"] = effective_outline_color.toStdString();
             node_yaml["position"]["x"] = node.x;
             node_yaml["position"]["y"] = node.y;
             nodes.push_back(node_yaml);
@@ -304,6 +314,10 @@ bool save_network_yaml(const QString& path, const NetworkData& data, QString& er
             if (!edge.description.trimmed().isEmpty()) {
                 edge_yaml["name"] = edge.description.toStdString();
             }
+            const QString effective_edge_color = edge.color.trimmed().isEmpty()
+                ? data.settings.line_color
+                : edge.color.trimmed();
+            edge_yaml["color"] = effective_edge_color.toStdString();
             if (!edge.values.empty()) {
                 YAML::Node values(YAML::NodeType::Sequence);
                 for (const QString& value : edge.values) {

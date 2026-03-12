@@ -78,10 +78,21 @@ public:
     QString value_unit() const;
 
     int selected_node_index() const;
-    QString selected_node_label() const;
+    int selected_edge_index() const;
+    bool has_node_selection() const;
+    bool has_edge_selection() const;
     QString selected_node_name() const;
     void set_selected_node_name(const QString& label);
     void reset_selected_node_name();
+
+    QString selected_item_type() const;
+    QString selected_item_label() const;
+    QColor selected_item_color() const;
+    QColor selected_node_fill_color() const;
+    QColor selected_node_outline_color() const;
+    void set_selected_item_color(const QColor& color);
+    void set_selected_node_fill_color(const QColor& color);
+    void set_selected_node_outline_color(const QColor& color);
 
     ViewSettingsData current_settings() const;
     void apply_settings(const ViewSettingsData& settings);
@@ -89,7 +100,7 @@ public:
     bool save_view_to_png(const QString& path, QString& error) const;
 
 signals:
-    void selected_node_changed(int index, const QString& name);
+    void selection_changed();
 
 protected:
     void initializeGL() override;
@@ -107,6 +118,7 @@ private:
     void snap_node_to_grid(NodeData& node) const;
     void snap_all_nodes_to_grid();
     int pick_node(const QPointF& world_point) const;
+    int pick_edge(const QPointF& world_point) const;
     QPointF to_world(const QPointF& screen_point) const;
 
     static constexpr float kGridSize = 100.0f;
@@ -128,6 +140,7 @@ private:
     QString value_unit_{"eV"};
     int dragged_node_{-1};
     int selected_node_{-1};
+    int selected_edge_{-1};
     QPointF drag_offset_;
     QPointF pan_offset_{0.0, 0.0};
     bool panning_{false};

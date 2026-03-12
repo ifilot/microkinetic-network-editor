@@ -46,7 +46,8 @@ void NetworkView::set_network(NetworkData data) {
     fit_network_to_viewport();
     snap_all_nodes_to_grid();
     selected_node_ = -1;
-    emit selected_node_changed(-1, QString());
+    selected_edge_ = -1;
+    emit selection_changed();
     update();
 }
 
@@ -155,36 +156,113 @@ void NetworkView::set_value_unit(const QString& unit) {
 QString NetworkView::value_unit() const { return value_unit_; }
 int NetworkView::selected_node_index() const { return selected_node_; }
 
-QString NetworkView::selected_node_label() const {
-    if (selected_node_ < 0 || selected_node_ >= static_cast<int>(network_data_.nodes.size())) {
-        return QString();
-    }
-    return network_data_.nodes[selected_node_].label;
-}
+int NetworkView::selected_edge_index() const { return selected_edge_; }
+
+bool NetworkView::has_node_selection() const { return selected_node_ >= 0; }
+
+bool NetworkView::has_edge_selection() const { return selected_edge_ >= 0; }
 
 QString NetworkView::selected_node_name() const {
-    if (selected_node_ < 0 || selected_node_ >= static_cast<int>(network_data_.nodes.size())) {
+    if (!has_node_selection() || selected_node_ >= static_cast<int>(network_data_.nodes.size())) {
         return QString();
     }
     return network_data_.nodes[selected_node_].name;
 }
 
 void NetworkView::set_selected_node_name(const QString& name) {
-    if (selected_node_ < 0 || selected_node_ >= static_cast<int>(network_data_.nodes.size())) {
+    if (!has_node_selection() || selected_node_ >= static_cast<int>(network_data_.nodes.size())) {
         return;
     }
     network_data_.nodes[selected_node_].name = name;
-    emit selected_node_changed(selected_node_, network_data_.nodes[selected_node_].name);
+    emit selection_changed();
     update();
 }
 
 void NetworkView::reset_selected_node_name() {
-    if (selected_node_ < 0 || selected_node_ >= static_cast<int>(network_data_.nodes.size())) {
+    if (!has_node_selection() || selected_node_ >= static_cast<int>(network_data_.nodes.size())) {
         return;
     }
     NodeData& node = network_data_.nodes[selected_node_];
     node.name = node.label;
-    emit selected_node_changed(selected_node_, node.name);
+    emit selection_changed();
+    update();
+}
+
+
+QString NetworkView::selected_item_type() const {
+    if (has_node_selection()) {
+        return "Node";
+    }
+    if (has_edge_selection()) {
+        return "Edge";
+    }
+    return QString();
+}
+
+QString NetworkView::selected_item_label() const {
+    if (has_node_selection() && selected_node_ < static_cast<int>(network_data_.nodes.size())) {
+        const NodeData& node = network_data_.nodes[selected_node_];
+        return node.name.isEmpty() ? node.label : node.name;
+    }
+    if (has_edge_selection() && selected_edge_ < static_cast<int>(network_data_.edges.size())) {
+        const EdgeData& edge = network_data_.edges[selected_edge_];
+        if (edge.from_index >= 0 && edge.to_index >= 0 &&
+            edge.from_index < static_cast<int>(network_data_.nodes.size()) &&
+            edge.to_index < static_cast<int>(network_data_.nodes.size())) {
+            return QString("%1 → %2").arg(network_data_.nodes[edge.from_index].label, network_data_.nodes[edge.to_index].label);
+        }
+    }
+    return QString();
+}
+
+QColor NetworkView::selected_item_color() const {
+    if (has_edge_selection() && selected_edge_ < static_cast<int>(network_data_.edges.size())) {
+        const QString& color = network_data_.edges[selected_edge_].color;
+        return color.isEmpty() ? line_color_ : QColor(color);
+    }
+    if (has_node_selection() && selected_node_ < static_cast<int>(network_data_.nodes.size())) {
+        return selected_node_outline_color();
+    }
+    return QColor();
+}
+
+QColor NetworkView::selected_node_fill_color() const {
+    if (!has_node_selection() || selected_node_ >= static_cast<int>(network_data_.nodes.size())) {
+        return QColor();
+    }
+    const QString& color = network_data_.nodes[selected_node_].fill_color;
+    return color.isEmpty() ? node_fill_color_ : QColor(color);
+}
+
+QColor NetworkView::selected_node_outline_color() const {
+    if (!has_node_selection() || selected_node_ >= static_cast<int>(network_data_.nodes.size())) {
+        return QColor();
+    }
+    const QString& color = network_data_.nodes[selected_node_].outline_color;
+    return color.isEmpty() ? node_outline_color_ : QColor(color);
+}
+
+void NetworkView::set_selected_item_color(const QColor& color) {
+    if (!has_edge_selection() || selected_edge_ >= static_cast<int>(network_data_.edges.size())) {
+        return;
+    }
+    network_data_.edges[selected_edge_].color = color.name();
+    update();
+}
+
+void NetworkView::set_selected_node_fill_color(const QColor& color) {
+    if (!has_node_selection() || selected_node_ >= static_cast<int>(network_data_.nodes.size())) {
+        return;
+    }
+    network_data_.nodes[selected_node_].fill_color = color.name();
+    update();
+}
+
+void NetworkView::set_selected_node_outline_color(const QColor& color) {
+    if (!has_node_selection() || selected_node_ >= static_cast<int>(network_data_.nodes.size())) {
+        return;
+    }
+    network_data_.nodes[selected_node_].outline_color = color.name();
     update();
 }
 
@@ -291,13 +369,13 @@ void NetworkView::draw_scene(QPainter& painter, const QRectF& world_visible_rect
     QPen edge_pen(line_color_);
     edge_pen.setWidthF(line_thickness_);
     edge_pen.setCapStyle(Qt::RoundCap);
-    painter.setPen(edge_pen);
 
     QFont text_font(font_family_, static_cast<int>(std::round(font_size_)));
     painter.setFont(text_font);
     const QFontMetrics metrics(text_font);
 
-    for (const EdgeData& edge : network_data_.edges) {
+    for (int edge_index = 0; edge_index < static_cast<int>(network_data_.edges.size()); ++edge_index) {
+        const EdgeData& edge = network_data_.edges[edge_index];
         if (edge.from_index < 0 || edge.to_index < 0 ||
             edge.from_index >= static_cast<int>(network_data_.nodes.size()) ||
             edge.to_index >= static_cast<int>(network_data_.nodes.size())) {
@@ -308,7 +386,20 @@ void NetworkView::draw_scene(QPainter& painter, const QRectF& world_visible_rect
         const NodeData& to = network_data_.nodes[edge.to_index];
         const QPointF p1(from.x, from.y);
         const QPointF p2(to.x, to.y);
+        const QColor effective_edge_color = edge.color.isEmpty() ? line_color_ : QColor(edge.color);
+        edge_pen.setColor(effective_edge_color);
+        painter.setPen(edge_pen);
         painter.drawLine(p1, p2);
+
+        if (edge_index == selected_edge_) {
+            painter.save();
+            painter.setBrush(Qt::NoBrush);
+            painter.setPen(QPen(QColor(255, 170, 0), 2.0, Qt::DashLine));
+            const QRectF bounds = QRectF(p1, p2).normalized().adjusted(-8.0, -8.0, 8.0, 8.0);
+            painter.drawRect(bounds);
+            painter.restore();
+            painter.setPen(edge_pen);
+        }
 
         if (!edge.values.empty()) {
             auto parse_value = [](const QString& raw, double& out) -> bool {
@@ -418,12 +509,13 @@ void NetworkView::draw_scene(QPainter& painter, const QRectF& world_visible_rect
         }
     }
 
-    painter.setPen(QPen(node_outline_color_, node_outline_thickness_));
-    painter.setBrush(QBrush(node_fill_color_));
-
     for (int i = 0; i < static_cast<int>(network_data_.nodes.size()); ++i) {
         const NodeData& node = network_data_.nodes[i];
         const QPointF center(node.x, node.y);
+        const QColor effective_fill = node.fill_color.isEmpty() ? node_fill_color_ : QColor(node.fill_color);
+        const QColor effective_outline = node.outline_color.isEmpty() ? node_outline_color_ : QColor(node.outline_color);
+        painter.setPen(QPen(effective_outline, node_outline_thickness_));
+        painter.setBrush(QBrush(effective_fill));
         painter.drawEllipse(center, node_radius_, node_radius_);
 
         if (i == selected_node_) {
@@ -464,14 +556,16 @@ void NetworkView::mousePressEvent(QMouseEvent* event) {
     if (event->button() == Qt::LeftButton) {
         const QPointF world = to_world(event->pos());
         dragged_node_ = pick_node(world);
-        selected_node_ = dragged_node_;
-        if (selected_node_ >= 0) {
+        if (dragged_node_ >= 0) {
+            selected_node_ = dragged_node_;
+            selected_edge_ = -1;
             const NodeData& node = network_data_.nodes[selected_node_];
             drag_offset_ = world - QPointF(node.x, node.y);
-            emit selected_node_changed(selected_node_, node.name);
         } else {
-            emit selected_node_changed(-1, QString());
+            selected_node_ = -1;
+            selected_edge_ = pick_edge(world);
         }
+        emit selection_changed();
         update();
     }
     QOpenGLWidget::mousePressEvent(event);
@@ -540,7 +634,8 @@ QRectF NetworkView::scene_bounds() const {
         }
     }
 
-    for (const EdgeData& edge : network_data_.edges) {
+    for (int edge_index = 0; edge_index < static_cast<int>(network_data_.edges.size()); ++edge_index) {
+        const EdgeData& edge = network_data_.edges[edge_index];
         if (edge.from_index < 0 || edge.to_index < 0 ||
             edge.from_index >= static_cast<int>(network_data_.nodes.size()) ||
             edge.to_index >= static_cast<int>(network_data_.nodes.size())) {
@@ -616,6 +711,39 @@ int NetworkView::pick_node(const QPointF& world_point) const {
         }
     }
     return -1;
+}
+
+
+int NetworkView::pick_edge(const QPointF& world_point) const {
+    int best_index = -1;
+    double best_distance = 1e9;
+    const double max_distance = std::max(10.0, line_thickness_ * 1.5);
+
+    for (int i = 0; i < static_cast<int>(network_data_.edges.size()); ++i) {
+        const EdgeData& edge = network_data_.edges[i];
+        if (edge.from_index < 0 || edge.to_index < 0 ||
+            edge.from_index >= static_cast<int>(network_data_.nodes.size()) ||
+            edge.to_index >= static_cast<int>(network_data_.nodes.size())) {
+            continue;
+        }
+        const QPointF a(network_data_.nodes[edge.from_index].x, network_data_.nodes[edge.from_index].y);
+        const QPointF b(network_data_.nodes[edge.to_index].x, network_data_.nodes[edge.to_index].y);
+        const QPointF ab = b - a;
+        const double ab_len2 = ab.x() * ab.x() + ab.y() * ab.y();
+        if (ab_len2 <= 1e-9) {
+            continue;
+        }
+        const QPointF ap = world_point - a;
+        const double t = std::clamp((ap.x() * ab.x() + ap.y() * ab.y()) / ab_len2, 0.0, 1.0);
+        const QPointF closest = a + t * ab;
+        const QPointF diff = world_point - closest;
+        const double dist = std::sqrt(diff.x() * diff.x() + diff.y() * diff.y());
+        if (dist <= max_distance && dist < best_distance) {
+            best_distance = dist;
+            best_index = i;
+        }
+    }
+    return best_index;
 }
 
 QPointF NetworkView::to_world(const QPointF& screen_point) const {

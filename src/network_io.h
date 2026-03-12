@@ -28,6 +28,8 @@
 struct NodeData {
     QString label;
     QString name;
+    QString fill_color;
+    QString outline_color;
     float x{0.0f};
     float y{0.0f};
 };
@@ -37,6 +39,7 @@ struct EdgeData {
     int to_index{-1};
     QString type;
     QString description;
+    QString color;
     std::vector<QString> values;
 };
 

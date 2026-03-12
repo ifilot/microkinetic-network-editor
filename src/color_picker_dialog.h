@@ -28,6 +28,7 @@ class ColorWheelWidget;
 class QLabel;
 class QLineEdit;
 class QSlider;
+class QVBoxLayout;
 
 class ColorPickerDialog : public QDialog {
     Q_OBJECT
@@ -38,6 +39,8 @@ public:
 
 private:
     void updateHexDisplay(const QColor& c);
+    void applyColor(const QColor& c);
+    void buildSwatches(QVBoxLayout* container_layout);
 
     ColorWheelWidget* wheel_{nullptr};
     QSlider* valueSlider_{nullptr};

@@ -1,0 +1,338 @@
+nodes:
+  - label: empty
+    fill_color: "#ffffff"
+    outline_color: "#000000"
+    position:
+      x: 500
+      y: 200
+  - label: CO*
+    fill_color: "#ffffff"
+    outline_color: "#000000"
+    position:
+      x: 400
+      y: 200
+  - label: CO2_1Vo*
+    fill_color: "#ffffff"
+    outline_color: "#000000"
+    position:
+      x: 200
+      y: 200
+  - label: 1Vo
+    fill_color: "#ffffff"
+    outline_color: "#000000"
+    position:
+      x: 0
+      y: 200
+  - label: O2_1Vo*
+    fill_color: "#ffffff"
+    outline_color: "#000000"
+    position:
+      x: 0
+      y: 500
+  - label: O*
+    fill_color: "#ffffff"
+    outline_color: "#000000"
+    position:
+      x: 500
+      y: 500
+  - label: CO_O*
+    fill_color: "#ffffff"
+    outline_color: "#000000"
+    position:
+      x: 500
+      y: 400
+  - label: CO2*
+    fill_color: "#ffffff"
+    outline_color: "#000000"
+    position:
+      x: 500
+      y: 300
+  - label: OCOO_1Vo*
+    fill_color: "#ffffff"
+    outline_color: "#000000"
+    position:
+      x: 300
+      y: 400
+  - label: OCOO*
+    fill_color: "#ffffff"
+    outline_color: "#000000"
+    position:
+      x: 700
+      y: 300
+  - label: O2*
+    fill_color: "#ffffff"
+    outline_color: "#000000"
+    position:
+      x: 700
+      y: 200
+  - label: CO2_O*
+    fill_color: "#ffffff"
+    outline_color: "#000000"
+    position:
+      x: 700
+      y: 400
+  - label: 2O*
+    fill_color: "#ffffff"
+    outline_color: "#000000"
+    position:
+      x: 900
+      y: 200
+  - label: CO_2O*
+    fill_color: "#ffffff"
+    outline_color: "#000000"
+    position:
+      x: 900
+      y: 400
+  - label: 1Vo_sub
+    fill_color: "#ffffff"
+    outline_color: "#000000"
+    position:
+      x: 0
+      y: 0
+  - label: CO_1Vo_sub*
+    fill_color: "#ffffff"
+    outline_color: "#000000"
+    position:
+      x: 100
+      y: 0
+  - label: CO2_2Vo*
+    fill_color: "#ffffff"
+    outline_color: "#000000"
+    position:
+      x: 200
+      y: 0
+  - label: 2Vo
+    fill_color: "#ffffff"
+    outline_color: "#000000"
+    position:
+      x: 400
+      y: 0
+  - label: O2_2Vo*
+    fill_color: "#ffffff"
+    outline_color: "#000000"
+    position:
+      x: 500
+      y: 0
+edges:
+  - nodes:
+      - empty
+      - CO*
+    type: ads
+    name: CO adsorption
+    color: "#dc322f"
+    values:
+      - 0
+      - 1.438098262438125
+  - nodes:
+      - CO*
+      - CO2_1Vo*
+    type: surf
+    name: CO oxidation via Mars-van-Krevelen
+    color: "#dc322f"
+    values:
+      - 0.7071088811861611
+      - 0.8133729731592205
+  - nodes:
+      - 1Vo
+      - CO2_1Vo*
+    type: ads
+    name: CO2 desorption from CO2*+1Vo
+    color: "#dc322f"
+    values:
+      - 0
+      - 1.11090243341558
+  - nodes:
+      - 1Vo
+      - O2_1Vo*
+    type: ads
+    name: O2 adsorption on 1Vo
+    color: "#dc322f"
+    values:
+      - 0
+      - 2.033626491184285
+  - nodes:
+      - O2_1Vo*
+      - O*
+    type: surf
+    name: O2 dissociation via MvK1, healing the vacancy
+    color: "#dc322f"
+    values:
+      - 0.34853382376864755
+      - 1.5809307100604222
+  - nodes:
+      - O*
+      - CO_O*
+    type: ads
+    name: CO + O co-adsorption via LH2 pathway
+    color: "#dc322f"
+    values:
+      - 0
+      - 1.250386285686932
+  - nodes:
+      - CO_O*
+      - CO2*
+    type: surf
+    name: CO oxidation via LH2 pathway
+    color: "#dc322f"
+    values:
+      - 0.4169083526804126
+      - 1.8809067714441168
+  - nodes:
+      - empty
+      - CO2*
+    type: ads
+    name: CO2 adsorption
+    color: "#dc322f"
+    values:
+      - 0
+      - 0.1355663519492322
+  - nodes:
+      - O2_1Vo*
+      - OCOO_1Vo*
+    type: ads
+    name: CO+O co-adsorption forming OCOO in MvK1 pathway
+    color: "#dc322f"
+    values:
+      - 0
+      - 0.2525526584647491
+  - nodes:
+      - OCOO_1Vo*
+      - CO2*
+    type: rearrangement
+    name: OCOO dissociation via MvK1
+    color: "#dc322f"
+    values:
+      - -3.6942289322774338
+      - 3.6942289322774338
+  - nodes:
+      - empty
+      - O2*
+    type: ads
+    name: O2 adsorption
+    color: "#dc322f"
+    values:
+      - 0
+      - 0.8488266608031665
+  - nodes:
+      - O2*
+      - OCOO*
+    type: ads
+    name: CO + O2 co-adsorption in LH1
+    color: "#dc322f"
+    values:
+      - 0
+      - 1.13910145450456
+  - nodes:
+      - OCOO*
+      - CO2_O*
+    type: surf
+    name: OCOO dissociation via LH1
+    color: "#dc322f"
+    values:
+      - 0.6597302606769675
+      - 2.755980581201544
+  - nodes:
+      - O*
+      - CO2_O*
+    type: ads
+    name: CO2 co-adsorption with O* in LH1
+    color: "#dc322f"
+    values:
+      - 0
+      - 0.3846951373604123
+  - nodes:
+      - O2*
+      - 2O*
+    type: surf
+    name: O2 dissociation via LH1
+    color: "#dc322f"
+    values:
+      - 1.3301311494709018
+      - 1.8387464754097185
+  - nodes:
+      - 2O*
+      - CO_2O*
+    type: ads
+    name: CO co-adsorption with 2O* in LH1
+    color: "#268bd2"
+    values:
+      - 0
+      - 0.9796320634225392
+  - nodes:
+      - CO_2O*
+      - CO2_O*
+    type: rearrangement
+    name: CO oxidation via LH1
+    color: "#dc322f"
+    values:
+      - -1.747104385667781
+      - 1.747104385667781
+  - nodes:
+      - 1Vo
+      - 1Vo_sub
+    type: rearrangement
+    name: oxygen vacancy migration
+    color: "#dc322f"
+    values:
+      - -0.2419478346644279
+      - 0.2419478346644279
+  - nodes:
+      - 1Vo_sub
+      - CO_1Vo_sub*
+    type: ads
+    name: CO adsorption on subsurface oxygen site in MvK2
+    color: "#dc322f"
+    values:
+      - 0
+      - 1.513160277834301
+  - nodes:
+      - CO_1Vo_sub*
+      - CO2_2Vo*
+    type: surf
+    name: CO oxidation via MvK2
+    color: "#dc322f"
+    values:
+      - 0.9438865183190432
+      - 0.41268265239546903
+  - nodes:
+      - 2Vo
+      - CO2_2Vo*
+    type: ads
+    name: CO2 adsorption on 2Vo site in MvK2
+    color: "#dc322f"
+    values:
+      - 0
+      - 0.8989679414671117
+  - nodes:
+      - 2Vo
+      - O2_2Vo*
+    type: ads
+    name: O2 adsorption on 2Vo site in MvK2
+    color: "#dc322f"
+    values:
+      - 0
+      - 2.466226491446826
+  - nodes:
+      - O2_2Vo*
+      - empty
+    type: rearrangement
+    name: O2 dissociation in MvK2 to heal the two oxygen vacancies
+    color: "#dc322f"
+    values:
+      - -3.053678933422139
+      - 3.053678933422139
+settings:
+  node_radius: 10
+  line_thickness: 5
+  node_outline_thickness: 3
+  font_size: 12
+  label_angle_degrees: -35
+  node_label_distance: 5
+  font_family: Bahnschrift SemiBold
+  background_color: "#fdf6e3"
+  node_fill_color: "#ffffff"
+  node_outline_color: "#000000"
+  line_color: "#dc322f"
+  label_color: "#000000"
+  value_decimals: 3
+  value_unit: eV

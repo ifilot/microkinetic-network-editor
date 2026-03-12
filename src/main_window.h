@@ -58,12 +58,12 @@ private slots:
     void update_value_unit(const QString& unit);
     void update_selected_node_name(const QString& label);
     void reset_selected_node_name();
-    void on_selected_node_changed(int index, const QString& label);
+    void on_selection_changed();
     void pick_background_color();
-    void pick_node_fill_color();
-    void pick_node_outline_color();
-    void pick_line_color();
     void pick_label_color();
+    void pick_selection_color();
+    void pick_selection_node_fill_color();
+    void pick_selection_node_outline_color();
 
 private:
     QString initial_dialog_directory() const;
@@ -86,17 +86,18 @@ private:
     QFontComboBox* font_family_combo_{nullptr};
     QSpinBox* value_decimals_spin_{nullptr};
     QComboBox* value_unit_combo_{nullptr};
+    QLabel* selected_type_value_{nullptr};
     QLineEdit* selected_node_edit_{nullptr};
     QPushButton* reset_node_name_button_{nullptr};
+    QPushButton* selection_color_button_{nullptr};
+    QLabel* selection_color_hex_{nullptr};
+    QPushButton* selection_node_fill_color_button_{nullptr};
+    QLabel* selection_node_fill_color_hex_{nullptr};
+    QPushButton* selection_node_outline_color_button_{nullptr};
+    QLabel* selection_node_outline_color_hex_{nullptr};
 
     QPushButton* bg_color_button_{nullptr};
     QLabel* bg_color_hex_{nullptr};
-    QPushButton* node_fill_color_button_{nullptr};
-    QLabel* node_fill_color_hex_{nullptr};
-    QPushButton* node_outline_color_button_{nullptr};
-    QLabel* node_outline_color_hex_{nullptr};
-    QPushButton* line_color_button_{nullptr};
-    QLabel* line_color_hex_{nullptr};
     QPushButton* label_color_button_{nullptr};
     QLabel* label_color_hex_{nullptr};
 

@@ -59,7 +59,7 @@ MainWindow::MainWindow(QWidget* parent)
 
     view_ = new NetworkView(this);
     setCentralWidget(view_);
-    connect(view_, &NetworkView::selected_node_changed, this, &MainWindow::on_selected_node_changed);
+    connect(view_, &NetworkView::selection_changed, this, &MainWindow::on_selection_changed);
 
     QSettings settings;
     last_directory_path_ = settings.value("io/last_directory", QString()).toString();
@@ -182,13 +182,14 @@ void MainWindow::build_settings_widget() {
     };
 
     add_color_row("Background", bg_color_button_, bg_color_hex_, SLOT(pick_background_color()));
-    add_color_row("Node fill", node_fill_color_button_, node_fill_color_hex_, SLOT(pick_node_fill_color()));
-    add_color_row("Node outline", node_outline_color_button_, node_outline_color_hex_, SLOT(pick_node_outline_color()));
-    add_color_row("Line color", line_color_button_, line_color_hex_, SLOT(pick_line_color()));
     add_color_row("Label color", label_color_button_, label_color_hex_, SLOT(pick_label_color()));
 
     auto* selection_group = new QGroupBox("Selection", settings_widget);
     auto* selection_form = new QFormLayout(selection_group);
+
+    selected_type_value_ = new QLabel("None", settings_widget);
+    selection_form->addRow("Selected", selected_type_value_);
+
     selected_node_edit_ = new QLineEdit(settings_widget);
     selected_node_edit_->setEnabled(false);
     selection_form->addRow("Node name", selected_node_edit_);
@@ -198,6 +199,10 @@ void MainWindow::build_settings_widget() {
     reset_node_name_button_->setEnabled(false);
     selection_form->addRow("", reset_node_name_button_);
     connect(reset_node_name_button_, &QPushButton::clicked, this, &MainWindow::reset_selected_node_name);
+
+    add_color_row("Selected item color", selection_color_button_, selection_color_hex_, SLOT(pick_selection_color()));
+    add_color_row("Node fill", selection_node_fill_color_button_, selection_node_fill_color_hex_, SLOT(pick_selection_node_fill_color()));
+    add_color_row("Node outline", selection_node_outline_color_button_, selection_node_outline_color_hex_, SLOT(pick_selection_node_outline_color()));
 
     layout->addWidget(geometry_group);
     layout->addWidget(typography_group);
@@ -346,11 +351,43 @@ void MainWindow::update_selected_node_name(const QString& label) { view_->set_se
 
 void MainWindow::reset_selected_node_name() { view_->reset_selected_node_name(); }
 
-void MainWindow::on_selected_node_changed(int index, const QString& label) {
-    const QSignalBlocker blocker(selected_node_edit_);
-    selected_node_edit_->setEnabled(index >= 0);
-    reset_node_name_button_->setEnabled(index >= 0);
-    selected_node_edit_->setText(label);
+void MainWindow::on_selection_changed() {
+    const bool node_selected = view_->has_node_selection();
+    const bool edge_selected = view_->has_edge_selection();
+
+    selected_type_value_->setText(view_->selected_item_type().isEmpty() ? "None" :
+                                  QString("%1: %2").arg(view_->selected_item_type(), view_->selected_item_label()));
+
+    {
+        const QSignalBlocker blocker(selected_node_edit_);
+        selected_node_edit_->setEnabled(node_selected);
+        reset_node_name_button_->setEnabled(node_selected);
+        selected_node_edit_->setText(node_selected ? view_->selected_node_name() : QString());
+    }
+
+    selection_color_button_->setEnabled(node_selected || edge_selected);
+    selection_color_hex_->setEnabled(node_selected || edge_selected);
+    if (node_selected || edge_selected) {
+        set_color_chip(selection_color_button_, selection_color_hex_, view_->selected_item_color());
+    } else {
+        selection_color_hex_->setText("N/A");
+    }
+
+    selection_node_fill_color_button_->setEnabled(node_selected);
+    selection_node_fill_color_hex_->setEnabled(node_selected);
+    if (node_selected) {
+        set_color_chip(selection_node_fill_color_button_, selection_node_fill_color_hex_, view_->selected_node_fill_color());
+    } else {
+        selection_node_fill_color_hex_->setText("N/A");
+    }
+
+    selection_node_outline_color_button_->setEnabled(node_selected);
+    selection_node_outline_color_hex_->setEnabled(node_selected);
+    if (node_selected) {
+        set_color_chip(selection_node_outline_color_button_, selection_node_outline_color_hex_, view_->selected_node_outline_color());
+    } else {
+        selection_node_outline_color_hex_->setText("N/A");
+    }
 }
 
 void MainWindow::pick_background_color() {
@@ -363,34 +400,47 @@ void MainWindow::pick_background_color() {
     set_color_chip(bg_color_button_, bg_color_hex_, dialog.color());
 }
 
-void MainWindow::pick_node_fill_color() {
-    ColorPickerDialog dialog(view_->node_fill_color(), this);
+void MainWindow::pick_selection_color() {
+    if (!view_->has_node_selection() && !view_->has_edge_selection()) {
+        return;
+    }
+    ColorPickerDialog dialog(view_->selected_item_color(), this);
     if (dialog.exec() != QDialog::Accepted) {
         return;
     }
 
-    view_->set_node_fill_color(dialog.color());
-    set_color_chip(node_fill_color_button_, node_fill_color_hex_, dialog.color());
+    if (view_->has_edge_selection()) {
+        view_->set_selected_item_color(dialog.color());
+    } else {
+        view_->set_selected_node_outline_color(dialog.color());
+    }
+    on_selection_changed();
 }
 
-void MainWindow::pick_node_outline_color() {
-    ColorPickerDialog dialog(view_->node_outline_color(), this);
+void MainWindow::pick_selection_node_fill_color() {
+    if (!view_->has_node_selection()) {
+        return;
+    }
+    ColorPickerDialog dialog(view_->selected_node_fill_color(), this);
     if (dialog.exec() != QDialog::Accepted) {
         return;
     }
 
-    view_->set_node_outline_color(dialog.color());
-    set_color_chip(node_outline_color_button_, node_outline_color_hex_, dialog.color());
+    view_->set_selected_node_fill_color(dialog.color());
+    on_selection_changed();
 }
 
-void MainWindow::pick_line_color() {
-    ColorPickerDialog dialog(view_->line_color(), this);
+void MainWindow::pick_selection_node_outline_color() {
+    if (!view_->has_node_selection()) {
+        return;
+    }
+    ColorPickerDialog dialog(view_->selected_node_outline_color(), this);
     if (dialog.exec() != QDialog::Accepted) {
         return;
     }
 
-    view_->set_line_color(dialog.color());
-    set_color_chip(line_color_button_, line_color_hex_, dialog.color());
+    view_->set_selected_node_outline_color(dialog.color());
+    on_selection_changed();
 }
 
 void MainWindow::pick_label_color() {
@@ -445,8 +495,6 @@ void MainWindow::sync_controls_from_view() {
     value_unit_combo_->setCurrentIndex(unit_index >= 0 ? unit_index : 0);
 
     set_color_chip(bg_color_button_, bg_color_hex_, view_->background_color());
-    set_color_chip(node_fill_color_button_, node_fill_color_hex_, view_->node_fill_color());
-    set_color_chip(node_outline_color_button_, node_outline_color_hex_, view_->node_outline_color());
-    set_color_chip(line_color_button_, line_color_hex_, view_->line_color());
     set_color_chip(label_color_button_, label_color_hex_, view_->label_color());
+    on_selection_changed();
 }
