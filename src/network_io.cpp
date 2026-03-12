@@ -216,8 +216,10 @@ bool load_network_yaml(const QString& path, NetworkData& out_data, QString& erro
             EdgeData edge_data;
             edge_data.from_index = from_it->second;
             edge_data.to_index = to_it->second;
+            edge_data.type = scalar_to_qstring(map_child(edge, "type")).trimmed();
+            edge_data.description = scalar_to_qstring(map_child(edge, "name")).trimmed();
 
-            const QString edge_type = scalar_to_qstring(map_child(edge, "type")).trimmed().toLower();
+            const QString edge_type = edge_data.type.toLower();
             if (edge_type == "ads") {
                 append_forward_backward_from_ads(map_child(edge, "ads"), edge_data.values);
             } else if (edge_type == "surf") {
@@ -296,6 +298,12 @@ bool save_network_yaml(const QString& path, const NetworkData& data, QString& er
             pair.push_back(data.nodes[edge.from_index].label.toStdString());
             pair.push_back(data.nodes[edge.to_index].label.toStdString());
             edge_yaml["nodes"] = pair;
+            if (!edge.type.trimmed().isEmpty()) {
+                edge_yaml["type"] = edge.type.toStdString();
+            }
+            if (!edge.description.trimmed().isEmpty()) {
+                edge_yaml["name"] = edge.description.toStdString();
+            }
             if (!edge.values.empty()) {
                 YAML::Node values(YAML::NodeType::Sequence);
                 for (const QString& value : edge.values) {

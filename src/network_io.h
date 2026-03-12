@@ -35,6 +35,8 @@ struct NodeData {
 struct EdgeData {
     int from_index{-1};
     int to_index{-1};
+    QString type;
+    QString description;
     std::vector<QString> values;
 };
 

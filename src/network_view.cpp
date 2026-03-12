@@ -344,7 +344,6 @@ void NetworkView::draw_scene(QPainter& painter, const QRectF& world_visible_rect
             if (parse_value(edge.values[0], numeric_forward)) {
                 forward_text = format_value(numeric_forward);
             }
-            forward_text = with_arrow(forward_text, forward_arrow, forward_prepend_arrow);
 
             QString backward_text;
             if (edge.values.size() >= 2) {
@@ -353,7 +352,27 @@ void NetworkView::draw_scene(QPainter& painter, const QRectF& world_visible_rect
                 if (parse_value(edge.values[1], numeric_backward)) {
                     backward_text = format_value(numeric_backward);
                 }
-                backward_text = with_arrow(backward_text, backward_arrow, !forward_prepend_arrow);
+            }
+
+            const QString edge_type = edge.type.trimmed().toLower();
+            if (edge_type == "ads") {
+                // Adsorption: keep directional cue and only display backward barrier.
+                forward_text.clear();
+                if (!backward_text.isEmpty()) {
+                    backward_text = "|" + backward_text + "|";
+                    backward_text = with_arrow(backward_text, backward_arrow, !forward_prepend_arrow);
+                }
+            } else if (edge_type == "rearrangement") {
+                // Rearrangements: keep arrows and wrap values in parentheses.
+                forward_text = with_arrow("(" + forward_text + ")", forward_arrow, forward_prepend_arrow);
+                if (!backward_text.isEmpty()) {
+                    backward_text = with_arrow("(" + backward_text + ")", backward_arrow, !forward_prepend_arrow);
+                }
+            } else {
+                forward_text = with_arrow(forward_text, forward_arrow, forward_prepend_arrow);
+                if (!backward_text.isEmpty()) {
+                    backward_text = with_arrow(backward_text, backward_arrow, !forward_prepend_arrow);
+                }
             }
 
             const QPointF center = (p1 + p2) / 2.0;
@@ -370,11 +389,13 @@ void NetworkView::draw_scene(QPainter& painter, const QRectF& world_visible_rect
             const int text_gap = 4;
             const int text_height = metrics.height();
 
-            const QRect forward_rect(-metrics.horizontalAdvance(forward_text) / 2,
-                                    -text_gap - text_height,
-                                    metrics.horizontalAdvance(forward_text),
-                                    text_height);
-            painter.drawText(forward_rect, Qt::AlignCenter, forward_text);
+            if (!forward_text.isEmpty()) {
+                const QRect forward_rect(-metrics.horizontalAdvance(forward_text) / 2,
+                                        -text_gap - text_height,
+                                        metrics.horizontalAdvance(forward_text),
+                                        text_height);
+                painter.drawText(forward_rect, Qt::AlignCenter, forward_text);
+            }
 
             if (!backward_text.isEmpty()) {
                 const QRect backward_rect(-metrics.horizontalAdvance(backward_text) / 2,
