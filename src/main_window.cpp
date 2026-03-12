@@ -22,7 +22,9 @@
 #include "main_window.h"
 
 #include <QAction>
+#include <QAbstractItemView>
 #include <QDockWidget>
+#include <QDialog>
 #include <QSpinBox>
 #include <QComboBox>
 #include <QDoubleSpinBox>
@@ -35,6 +37,7 @@
 #include <QIcon>
 #include <QLabel>
 #include <QLineEdit>
+#include <QListWidget>
 #include <QMenu>
 #include <QMenuBar>
 #include <QMessageBox>
@@ -42,8 +45,12 @@
 #include <QSettings>
 #include <QSignalBlocker>
 #include <QStatusBar>
+#include <QTableWidget>
+#include <QHeaderView>
 #include <QVBoxLayout>
 #include <QWidget>
+
+#include <algorithm>
 
 #include "color_picker_dialog.h"
 #include "config.h"
@@ -185,29 +192,100 @@ void MainWindow::build_settings_widget() {
     add_color_row("Label color", label_color_button_, label_color_hex_, SLOT(pick_label_color()));
 
     auto* selection_group = new QGroupBox("Selection", settings_widget);
-    auto* selection_form = new QFormLayout(selection_group);
+    selection_form_ = new QFormLayout(selection_group);
 
     selected_type_value_ = new QLabel("None", settings_widget);
-    selection_form->addRow("Selected", selected_type_value_);
+    selection_form_->addRow("Selected", selected_type_value_);
 
     selected_node_edit_ = new QLineEdit(settings_widget);
-    selected_node_edit_->setEnabled(false);
-    selection_form->addRow("Node name", selected_node_edit_);
+    selected_node_name_row_ = new QWidget(settings_widget);
+    {
+        auto* row_layout = new QHBoxLayout(selected_node_name_row_);
+        row_layout->setContentsMargins(0, 0, 0, 0);
+        row_layout->addWidget(selected_node_edit_);
+        reset_node_name_button_ = new QPushButton("Revert to label", settings_widget);
+        row_layout->addWidget(reset_node_name_button_);
+    }
+    selection_form_->addRow("Node name", selected_node_name_row_);
     connect(selected_node_edit_, &QLineEdit::textEdited, this, &MainWindow::update_selected_node_name);
-
-    reset_node_name_button_ = new QPushButton("Revert to label", settings_widget);
-    reset_node_name_button_->setEnabled(false);
-    selection_form->addRow("", reset_node_name_button_);
     connect(reset_node_name_button_, &QPushButton::clicked, this, &MainWindow::reset_selected_node_name);
 
-    add_color_row("Selected item color", selection_color_button_, selection_color_hex_, SLOT(pick_selection_color()));
-    add_color_row("Node fill", selection_node_fill_color_button_, selection_node_fill_color_hex_, SLOT(pick_selection_node_fill_color()));
-    add_color_row("Node outline", selection_node_outline_color_button_, selection_node_outline_color_hex_, SLOT(pick_selection_node_outline_color()));
+    auto add_selection_color_row = [this, settings_widget](const QString& label, QPushButton*& button, QLabel*& hex_label, QWidget*& row_widget, const char* slot) {
+        row_widget = new QWidget(settings_widget);
+        auto* row_layout = new QHBoxLayout(row_widget);
+        row_layout->setContentsMargins(0, 0, 0, 0);
+        hex_label = new QLabel("#000000", row_widget);
+        button = new QPushButton(row_widget);
+        button->setFixedSize(10, 10);
+        row_layout->addWidget(hex_label);
+        row_layout->addStretch();
+        row_layout->addWidget(button);
+        selection_form_->addRow(label, row_widget);
+        connect(button, SIGNAL(clicked()), this, slot);
+    };
+
+    add_selection_color_row("Edge color", edge_color_button_, edge_color_hex_, edge_color_row_, SLOT(pick_edge_color()));
+    add_selection_color_row("Node fill", selection_node_fill_color_button_, selection_node_fill_color_hex_, selected_node_fill_row_, SLOT(pick_selection_node_fill_color()));
+    add_selection_color_row("Node outline", selection_node_outline_color_button_, selection_node_outline_color_hex_, selected_node_outline_row_, SLOT(pick_selection_node_outline_color()));
+
+    edge_swap_labels_row_ = new QWidget(settings_widget);
+    {
+        auto* row_layout = new QHBoxLayout(edge_swap_labels_row_);
+        row_layout->setContentsMargins(0, 0, 0, 0);
+        swap_edge_labels_button_ = new QPushButton("Swap edge label sides", settings_widget);
+        swap_edge_labels_button_->setCheckable(true);
+        row_layout->addWidget(swap_edge_labels_button_);
+    }
+    selection_form_->addRow("", edge_swap_labels_row_);
+    connect(swap_edge_labels_button_, &QPushButton::toggled, this, &MainWindow::toggle_selected_edge_swap_labels);
+
+    edge_segments_table_ = new QTableWidget(settings_widget);
+    edge_segments_table_->setColumnCount(2);
+    edge_segments_table_->setHorizontalHeaderLabels(QStringList{"Segment", "Shape"});
+    edge_segments_table_->horizontalHeader()->setStretchLastSection(true);
+    edge_segments_table_->verticalHeader()->setVisible(false);
+    edge_segments_table_->setSelectionBehavior(QAbstractItemView::SelectRows);
+    edge_segments_table_->setSelectionMode(QAbstractItemView::SingleSelection);
+    edge_segments_table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    edge_segments_table_->setEnabled(false);
+    edge_segments_table_->setMinimumHeight(130);
+    edge_segments_row_ = edge_segments_table_;
+    selection_form_->addRow("Segments", edge_segments_table_);
+    connect(edge_segments_table_, &QTableWidget::currentCellChanged, this, &MainWindow::on_edge_segment_selected);
+
+    edge_label_segment_combo_ = new QComboBox(settings_widget);
+    edge_label_segment_row_ = edge_label_segment_combo_;
+    selection_form_->addRow("Label segment", edge_label_segment_combo_);
+    connect(edge_label_segment_combo_, qOverload<int>(&QComboBox::currentIndexChanged), this, &MainWindow::on_edge_label_segment_changed);
+
+    add_guide_node_button_ = new QPushButton("Add guide node", settings_widget);
+    add_guide_node_button_->setEnabled(false);
+    add_guide_node_row_ = add_guide_node_button_;
+    selection_form_->addRow("", add_guide_node_button_);
+    connect(add_guide_node_button_, &QPushButton::clicked, this, &MainWindow::add_selected_edge_guide_node);
+
+    remove_guide_node_button_ = new QPushButton("Remove guide node", settings_widget);
+    remove_guide_node_button_->setEnabled(false);
+    remove_guide_node_row_ = remove_guide_node_button_;
+    selection_form_->addRow("", remove_guide_node_button_);
+    connect(remove_guide_node_button_, &QPushButton::clicked, this, &MainWindow::remove_selected_edge_guide_node);
 
     layout->addWidget(geometry_group);
     layout->addWidget(typography_group);
     layout->addWidget(colors_group);
     layout->addWidget(selection_group);
+
+    auto* design_errors_row = new QWidget(settings_widget);
+    auto* design_errors_layout = new QHBoxLayout(design_errors_row);
+    design_errors_layout->setContentsMargins(0, 0, 0, 0);
+    design_errors_label_ = new QLabel("0 errors in design found.", design_errors_row);
+    design_errors_button_ = new QPushButton("Show", design_errors_row);
+    design_errors_layout->addWidget(design_errors_label_);
+    design_errors_layout->addStretch();
+    design_errors_layout->addWidget(design_errors_button_);
+    layout->addWidget(design_errors_row);
+    connect(design_errors_button_, &QPushButton::clicked, this, &MainWindow::show_design_errors_dialog);
+
     layout->addStretch();
 
     settings_widget->setLayout(layout);
@@ -360,6 +438,71 @@ void MainWindow::update_selected_node_name(const QString& label) { view_->set_se
 
 void MainWindow::reset_selected_node_name() { view_->reset_selected_node_name(); }
 
+void MainWindow::toggle_selected_edge_swap_labels(bool checked) { view_->set_selected_edge_swap_label_sides(checked); }
+
+void MainWindow::on_edge_segment_selected(int current_row, int, int, int) {
+    Q_UNUSED(current_row);
+    // Segment row clicks should only control segment-shape editing focus,
+    // not the label placement segment.
+}
+
+void MainWindow::on_edge_label_segment_changed(int index) {
+    if (index < 0) {
+        return;
+    }
+    view_->set_selected_edge_label_segment_index(index);
+}
+
+void MainWindow::add_selected_edge_guide_node() { view_->add_selected_edge_guide_node(); }
+
+void MainWindow::remove_selected_edge_guide_node() { view_->remove_selected_edge_guide_node(); }
+
+void MainWindow::refresh_edge_segments_table() {
+    const bool edge_selected = view_->has_edge_selection();
+    const int segment_count = edge_selected ? view_->selected_edge_segment_count() : 0;
+
+    edge_segments_table_->setEnabled(edge_selected && segment_count > 0);
+    edge_label_segment_combo_->setEnabled(edge_selected && segment_count > 0);
+    edge_segments_table_->setRowCount(segment_count);
+
+    for (int row = 0; row < segment_count; ++row) {
+        auto* segment_item = new QTableWidgetItem(QString("Segment %1").arg(row + 1));
+        edge_segments_table_->setItem(row, 0, segment_item);
+
+        auto* shape_combo = new QComboBox(edge_segments_table_);
+        shape_combo->addItem("Straight");
+        shape_combo->addItem("90° bend (clockwise)");
+        shape_combo->addItem("90° bend (counterclockwise)");
+        shape_combo->addItem("Wiggle (horizontal first)");
+        shape_combo->addItem("Wiggle (vertical first)");
+        shape_combo->setCurrentIndex(static_cast<int>(view_->selected_edge_segment_kind_at(row)));
+        connect(shape_combo, qOverload<int>(&QComboBox::currentIndexChanged), this, [this, row](int index) {
+            if (index < 0) {
+                return;
+            }
+            view_->set_selected_edge_segment_kind_at(row, static_cast<NetworkView::SegmentKindUi>(index));
+        });
+        edge_segments_table_->setCellWidget(row, 1, shape_combo);
+    }
+
+    {
+        const QSignalBlocker blocker(edge_label_segment_combo_);
+        edge_label_segment_combo_->clear();
+        for (int row = 0; row < segment_count; ++row) {
+            edge_label_segment_combo_->addItem(QString("Segment %1").arg(row + 1));
+        }
+        if (segment_count > 0) {
+            edge_label_segment_combo_->setCurrentIndex(std::clamp(view_->selected_edge_label_segment_index(), 0, segment_count - 1));
+        }
+    }
+
+    if (segment_count > 0) {
+        const int active_row = std::clamp(view_->selected_edge_label_segment_index(), 0, segment_count - 1);
+        const QSignalBlocker blocker(edge_segments_table_);
+        edge_segments_table_->setCurrentCell(active_row, 0);
+    }
+}
+
 void MainWindow::on_selection_changed() {
     const bool node_selected = view_->has_node_selection();
     const bool edge_selected = view_->has_edge_selection();
@@ -369,34 +512,103 @@ void MainWindow::on_selection_changed() {
 
     {
         const QSignalBlocker blocker(selected_node_edit_);
-        selected_node_edit_->setEnabled(node_selected);
-        reset_node_name_button_->setEnabled(node_selected);
         selected_node_edit_->setText(node_selected ? view_->selected_node_name() : QString());
     }
+    selected_node_edit_->setEnabled(node_selected);
+    reset_node_name_button_->setEnabled(node_selected);
 
-    selection_color_button_->setEnabled(node_selected || edge_selected);
-    selection_color_hex_->setEnabled(node_selected || edge_selected);
-    if (node_selected || edge_selected) {
-        set_color_chip(selection_color_button_, selection_color_hex_, view_->selected_item_color());
-    } else {
-        selection_color_hex_->setText("N/A");
+    selected_node_name_row_->setVisible(node_selected);
+    if (QWidget* label = selection_form_->labelForField(selected_node_name_row_)) {
+        label->setVisible(node_selected);
     }
 
-    selection_node_fill_color_button_->setEnabled(node_selected);
-    selection_node_fill_color_hex_->setEnabled(node_selected);
+    edge_color_row_->setVisible(edge_selected);
+    if (QWidget* label = selection_form_->labelForField(edge_color_row_)) {
+        label->setVisible(edge_selected);
+    }
+    if (edge_selected) {
+        set_color_chip(edge_color_button_, edge_color_hex_, view_->selected_item_color());
+    }
+
+    selected_node_fill_row_->setVisible(node_selected);
+    if (QWidget* label = selection_form_->labelForField(selected_node_fill_row_)) {
+        label->setVisible(node_selected);
+    }
     if (node_selected) {
         set_color_chip(selection_node_fill_color_button_, selection_node_fill_color_hex_, view_->selected_node_fill_color());
-    } else {
-        selection_node_fill_color_hex_->setText("N/A");
     }
 
-    selection_node_outline_color_button_->setEnabled(node_selected);
-    selection_node_outline_color_hex_->setEnabled(node_selected);
+    selected_node_outline_row_->setVisible(node_selected);
+    if (QWidget* label = selection_form_->labelForField(selected_node_outline_row_)) {
+        label->setVisible(node_selected);
+    }
     if (node_selected) {
         set_color_chip(selection_node_outline_color_button_, selection_node_outline_color_hex_, view_->selected_node_outline_color());
-    } else {
-        selection_node_outline_color_hex_->setText("N/A");
     }
+
+    edge_swap_labels_row_->setVisible(edge_selected);
+    if (QWidget* label = selection_form_->labelForField(edge_swap_labels_row_)) {
+        label->setVisible(edge_selected);
+    }
+    {
+        const QSignalBlocker blocker(swap_edge_labels_button_);
+        swap_edge_labels_button_->setChecked(edge_selected ? view_->selected_edge_swap_label_sides() : false);
+    }
+
+    edge_segments_row_->setVisible(edge_selected);
+    if (QWidget* label = selection_form_->labelForField(edge_segments_row_)) {
+        label->setVisible(edge_selected);
+    }
+    edge_label_segment_row_->setVisible(edge_selected);
+    if (QWidget* label = selection_form_->labelForField(edge_label_segment_row_)) {
+        label->setVisible(edge_selected);
+    }
+    add_guide_node_row_->setVisible(edge_selected);
+    if (QWidget* label = selection_form_->labelForField(add_guide_node_row_)) {
+        label->setVisible(edge_selected);
+    }
+    remove_guide_node_row_->setVisible(edge_selected);
+    if (QWidget* label = selection_form_->labelForField(remove_guide_node_row_)) {
+        label->setVisible(edge_selected);
+    }
+
+    refresh_edge_segments_table();
+
+    add_guide_node_button_->setEnabled(edge_selected && view_->selected_edge_can_add_guide_node());
+    remove_guide_node_button_->setEnabled(edge_selected && view_->selected_edge_can_remove_guide_node());
+    refresh_design_errors_summary();
+}
+
+void MainWindow::refresh_design_errors_summary() {
+    design_errors_cache_ = view_->design_errors();
+    const int count = design_errors_cache_.size();
+    design_errors_label_->setText(QString("%1 error%2 in design found.").arg(count).arg(count == 1 ? "" : "s"));
+    if (count > 0) {
+        design_errors_label_->setStyleSheet("QLabel { color: #dc322f; font-weight: 600; }");
+    } else {
+        design_errors_label_->setStyleSheet(QString());
+    }
+    design_errors_button_->setEnabled(count > 0);
+}
+
+void MainWindow::show_design_errors_dialog() {
+    if (design_errors_cache_.isEmpty()) {
+        return;
+    }
+
+    QDialog dialog(this);
+    dialog.setWindowTitle("Design errors");
+    dialog.resize(680, 360);
+    auto* layout = new QVBoxLayout(&dialog);
+    auto* list = new QListWidget(&dialog);
+    list->addItems(design_errors_cache_);
+    layout->addWidget(list);
+
+    auto* close_button = new QPushButton("Close", &dialog);
+    connect(close_button, &QPushButton::clicked, &dialog, &QDialog::accept);
+    layout->addWidget(close_button);
+
+    dialog.exec();
 }
 
 void MainWindow::pick_background_color() {
@@ -409,8 +621,8 @@ void MainWindow::pick_background_color() {
     set_color_chip(bg_color_button_, bg_color_hex_, dialog.color());
 }
 
-void MainWindow::pick_selection_color() {
-    if (!view_->has_node_selection() && !view_->has_edge_selection()) {
+void MainWindow::pick_edge_color() {
+    if (!view_->has_edge_selection()) {
         return;
     }
     ColorPickerDialog dialog(view_->selected_item_color(), this);
@@ -418,11 +630,7 @@ void MainWindow::pick_selection_color() {
         return;
     }
 
-    if (view_->has_edge_selection()) {
-        view_->set_selected_item_color(dialog.color());
-    } else {
-        view_->set_selected_node_outline_color(dialog.color());
-    }
+    view_->set_selected_item_color(dialog.color());
     on_selection_changed();
 }
 

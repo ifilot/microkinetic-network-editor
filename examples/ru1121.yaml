@@ -1,0 +1,102 @@
+pymkmkit:
+  version: 0.1.0
+  units: eV
+  energy_type: elec+zpe
+nodes:
+- label: empty
+  structure: ru1121_structures/empty.yaml
+- label: CO*
+  structure: ru1121_structures/co__1.yaml
+- label: C*
+  structure: ru1121_structures/c.yaml
+- label: O*
+  structure: ru1121_structures/o.yaml
+- label: CH*
+  structure: ru1121_structures/ch.yaml
+- label: CH2*
+  structure: ru1121_structures/ch2.yaml
+- label: CH3*
+  structure: ru1121_structures/ch3.yaml
+- label: H*
+  structure: ru1121_structures/h.yaml
+- label: OH*
+  structure: ru1121_structures/oh.yaml
+- label: H2O*
+  structure: ru1121_structures/h2o__1.yaml
+- label: CH4
+  structure: ru1121_structures/ch4.yaml
+- label: CO
+  structure: ru1121_structures/co__2.yaml
+- label: H2
+  structure: ru1121_structures/h2.yaml
+- label: H2O
+  structure: ru1121_structures/h2o__2.yaml
+edges:
+- name: CO dissociation
+  type: surf
+  nodes:
+  - CO*
+  - C*
+  forward: 0.7080028430897156
+  backward: 0.7438501929936465
+- name: CO dissociation
+  type: surf
+  nodes:
+  - CO*
+  - O*
+  forward: 0.7080028430897156
+  backward: 0.7438501929936465
+- name: C hydrogenation
+  type: surf
+  nodes:
+  - C*
+  - CH*
+  forward: 0.40675383911190255
+  backward: 0.26738162752002786
+- name: CH hydrogenation
+  type: surf
+  nodes:
+  - CH*
+  - CH2*
+  forward: 0.7037797578729998
+  backward: 0.3623659245363919
+- name: CH2 hydrogenation
+  type: surf
+  nodes:
+  - CH2*
+  - CH3*
+  forward: 0.6724791559985482
+  backward: 0.6575613554771652
+- name: CH3 hydrogenation
+  type: surf
+  nodes:
+  - CH3*
+  - CH4
+  forward: 1.1984658527715288
+  backward: 0.46699863573038325
+- name: O hydrogenation
+  type: surf
+  nodes:
+  - O*
+  - OH*
+  forward: 0.9253489072050349
+  backward: 0.607454457202829
+- name: OH hydrogenation
+  type: surf
+  nodes:
+  - OH*
+  - H2O*
+  forward: 1.1028015704059453
+  backward: 0.44687573117954515
+- name: CO adsorption
+  type: ads
+  nodes:
+  - CO
+  - CO*
+  ads: -1.6380418417986062
+- name: H2O adsorption
+  type: ads
+  nodes:
+  - H2O
+  - H2O*
+  ads: -0.6432017863050621
