@@ -27,21 +27,65 @@
 
 #include <QString>
 
+#include <cmath>
+#include <algorithm>
 #include <exception>
 #include <fstream>
 #include <unordered_map>
+#include <unordered_set>
 
 namespace {
 
 constexpr float kGridSpacing = 140.0f;
 constexpr int kGridColumns = 4;
 
-void assign_default_positions(NetworkData& data) {
+bool overlaps_existing_node(float x, float y, const std::vector<NodeData>& nodes, float minimum_distance_squared) {
+    for (const NodeData& node : nodes) {
+        const float dx = x - node.x;
+        const float dy = y - node.y;
+        const float distance_squared = dx * dx + dy * dy;
+        if (distance_squared < minimum_distance_squared) {
+            return true;
+        }
+    }
+    return false;
+}
+
+void assign_default_positions(NetworkData& data, const std::vector<bool>& has_position, float node_radius) {
+    std::vector<NodeData> placed_nodes;
+    placed_nodes.reserve(data.nodes.size());
+
     for (size_t i = 0; i < data.nodes.size(); ++i) {
-        const int col = static_cast<int>(i % kGridColumns);
-        const int row = static_cast<int>(i / kGridColumns);
-        data.nodes[i].x = 100.0f + static_cast<float>(col) * kGridSpacing;
-        data.nodes[i].y = 100.0f + static_cast<float>(row) * kGridSpacing;
+        if (has_position[i]) {
+            placed_nodes.push_back(data.nodes[i]);
+        }
+    }
+
+    const float minimum_distance = std::max(2.0f * node_radius, 1.0f);
+    const float minimum_distance_squared = minimum_distance * minimum_distance;
+
+    size_t next_slot = 0;
+    for (size_t i = 0; i < data.nodes.size(); ++i) {
+        if (has_position[i]) {
+            continue;
+        }
+
+        while (true) {
+            const int col = static_cast<int>(next_slot % kGridColumns);
+            const int row = static_cast<int>(next_slot / kGridColumns);
+            const float x = 100.0f + static_cast<float>(col) * kGridSpacing;
+            const float y = 100.0f + static_cast<float>(row) * kGridSpacing;
+            ++next_slot;
+
+            if (overlaps_existing_node(x, y, placed_nodes, minimum_distance_squared)) {
+                continue;
+            }
+
+            data.nodes[i].x = x;
+            data.nodes[i].y = y;
+            placed_nodes.push_back(data.nodes[i]);
+            break;
+        }
     }
 }
 
@@ -89,6 +133,40 @@ void append_value_node(const YAML::Node& value, std::vector<QString>& out_values
     }
 }
 
+
+QString segment_kind_to_string(EdgeData::SegmentKind kind) {
+    switch (kind) {
+    case EdgeData::SegmentKind::BendClockwise:
+        return "bend_cw";
+    case EdgeData::SegmentKind::BendCounterClockwise:
+        return "bend_ccw";
+    case EdgeData::SegmentKind::WiggleHorizontalFirst:
+        return "wiggle_horizontal_first";
+    case EdgeData::SegmentKind::WiggleVerticalFirst:
+        return "wiggle_vertical_first";
+    case EdgeData::SegmentKind::Straight:
+    default:
+        return "straight";
+    }
+}
+
+EdgeData::SegmentKind segment_kind_from_string(const QString& kind_raw) {
+    const QString kind = kind_raw.trimmed().toLower();
+    if (kind == "bend_cw" || kind == "clockwise") {
+        return EdgeData::SegmentKind::BendClockwise;
+    }
+    if (kind == "bend_ccw" || kind == "counterclockwise") {
+        return EdgeData::SegmentKind::BendCounterClockwise;
+    }
+    if (kind == "wiggle_horizontal_first") {
+        return EdgeData::SegmentKind::WiggleHorizontalFirst;
+    }
+    if (kind == "wiggle_vertical_first") {
+        return EdgeData::SegmentKind::WiggleVerticalFirst;
+    }
+    return EdgeData::SegmentKind::Straight;
+}
+
 void append_forward_backward_from_ads(const YAML::Node& ads_node, std::vector<QString>& out_values) {
     if (!ads_node || !ads_node.IsScalar()) {
         return;
@@ -119,7 +197,36 @@ bool load_network_yaml(const QString& path, NetworkData& out_data, QString& erro
 
         NetworkData data;
         std::unordered_map<std::string, int> index_by_label;
-        bool has_all_positions = true;
+        std::vector<bool> has_position;
+        has_position.reserve(node_list.size());
+
+        std::unordered_set<std::string> labels_in_edges;
+        labels_in_edges.reserve(edge_list.size() * 2);
+        for (size_t i = 0; i < edge_list.size(); ++i) {
+            const YAML::Node edge = edge_list[i];
+            const YAML::Node edge_nodes = map_child(edge, "nodes");
+            if (!edge_nodes || !edge_nodes.IsSequence()) {
+                error = "An edge has an invalid 'nodes' entry (expected a sequence of two labels).";
+                return false;
+            }
+            if (edge_nodes.size() > 2) {
+                error = QString("Edge %1 contains more than two nodes (%2). Only pairwise edges are supported.")
+                    .arg(i + 1)
+                    .arg(static_cast<int>(edge_nodes.size()));
+                return false;
+            }
+            if (edge_nodes.size() < 2) {
+                error = QString("Edge %1 has fewer than two nodes.").arg(i + 1);
+                return false;
+            }
+
+            labels_in_edges.insert(edge_nodes[0].as<std::string>());
+            labels_in_edges.insert(edge_nodes[1].as<std::string>());
+        }
+
+        YAML::Node settings = root["settings"];
+        const float node_radius = (settings && settings.IsMap() && settings["node_radius"]) ?
+            settings["node_radius"].as<float>() : data.settings.node_radius;
 
         for (size_t i = 0; i < node_list.size(); ++i) {
             const YAML::Node yaml_node = node_list[i];
@@ -131,15 +238,24 @@ bool load_network_yaml(const QString& path, NetworkData& out_data, QString& erro
 
             NodeData node;
             node.label = scalar_to_qstring(label_node);
+
+            if (labels_in_edges.find(node.label.toStdString()) == labels_in_edges.end()) {
+                qWarning() << "Ignoring unconnected node with label:" << node.label;
+                continue;
+            }
+
             const QString maybe_name = scalar_to_qstring(map_child(yaml_node, "name"));
             node.name = maybe_name.isEmpty() ? node.label : maybe_name;
+            node.fill_color = scalar_to_qstring(map_child(yaml_node, "fill_color")).trimmed();
+            node.outline_color = scalar_to_qstring(map_child(yaml_node, "outline_color")).trimmed();
 
             if (map_child(yaml_node, "position") && map_child(yaml_node, "position").IsMap() &&
                 map_child(map_child(yaml_node, "position"), "x") && map_child(map_child(yaml_node, "position"), "y")) {
                 node.x = map_child(map_child(yaml_node, "position"), "x").as<float>();
                 node.y = map_child(map_child(yaml_node, "position"), "y").as<float>();
+                has_position.push_back(true);
             } else {
-                has_all_positions = false;
+                has_position.push_back(false);
             }
 
             index_by_label[node.label.toStdString()] = static_cast<int>(data.nodes.size());
@@ -149,11 +265,6 @@ bool load_network_yaml(const QString& path, NetworkData& out_data, QString& erro
         for (size_t i = 0; i < edge_list.size(); ++i) {
             const YAML::Node edge = edge_list[i];
             const YAML::Node edge_nodes = map_child(edge, "nodes");
-            if (!edge_nodes || !edge_nodes.IsSequence() || edge_nodes.size() != 2) {
-                error = "An edge has an invalid 'nodes' entry (expected two labels).";
-                return false;
-            }
-
             const std::string from_label = edge_nodes[0].as<std::string>();
             const std::string to_label = edge_nodes[1].as<std::string>();
 
@@ -167,32 +278,57 @@ bool load_network_yaml(const QString& path, NetworkData& out_data, QString& erro
             EdgeData edge_data;
             edge_data.from_index = from_it->second;
             edge_data.to_index = to_it->second;
+            edge_data.type = scalar_to_qstring(map_child(edge, "type")).trimmed();
+            edge_data.description = scalar_to_qstring(map_child(edge, "name")).trimmed();
+            edge_data.color = scalar_to_qstring(map_child(edge, "color")).trimmed();
 
-            const QString edge_type = scalar_to_qstring(map_child(edge, "type")).trimmed().toLower();
-            if (edge_type == "ads") {
-                append_forward_backward_from_ads(map_child(edge, "ads"), edge_data.values);
-            } else if (edge_type == "surf") {
+            append_value_node(map_child(edge, "values"), edge_data.values);
+
+            if (edge_data.values.empty()) {
                 append_value_node(map_child(edge, "forward"), edge_data.values);
                 append_value_node(map_child(edge, "backward"), edge_data.values);
-            } else {
-                append_value_node(map_child(edge, "values"), edge_data.values);
-                if (edge_data.values.empty()) {
-                    append_value_node(map_child(edge, "forward"), edge_data.values);
-                    append_value_node(map_child(edge, "backward"), edge_data.values);
-                    if (edge_data.values.empty()) {
-                        append_value_node(map_child(edge, "ads"), edge_data.values);
-                    }
+            }
+
+            if (edge_data.values.empty()) {
+                const QString edge_type = edge_data.type.toLower();
+                if (edge_type == "ads") {
+                    append_forward_backward_from_ads(map_child(edge, "ads"), edge_data.values);
+                } else {
+                    append_value_node(map_child(edge, "ads"), edge_data.values);
                 }
             }
+
+            edge_data.swap_label_sides = map_child(edge, "swap_label_sides") ? map_child(edge, "swap_label_sides").as<bool>() : false;
+            edge_data.label_segment_index = map_child(edge, "label_segment") ? map_child(edge, "label_segment").as<int>() : 0;
+
+            const YAML::Node guide_nodes = map_child(edge, "guide_nodes");
+            if (guide_nodes && guide_nodes.IsSequence()) {
+                for (size_t guide_index = 0; guide_index < guide_nodes.size(); ++guide_index) {
+                    const YAML::Node guide_node = guide_nodes[guide_index];
+                    if (!guide_node.IsMap() || !guide_node["x"] || !guide_node["y"]) {
+                        continue;
+                    }
+                    EdgeData::GuideNode parsed_guide_node;
+                    parsed_guide_node.x = guide_node["x"].as<float>();
+                    parsed_guide_node.y = guide_node["y"].as<float>();
+                    edge_data.guide_nodes.push_back(parsed_guide_node);
+                }
+            }
+
+            const YAML::Node segment_types = map_child(edge, "segment_types");
+            if (segment_types && segment_types.IsSequence()) {
+                for (size_t segment_index = 0; segment_index < segment_types.size(); ++segment_index) {
+                    edge_data.segment_kinds.push_back(segment_kind_from_string(scalar_to_qstring(segment_types[segment_index])));
+                }
+            }
+            edge_data.segment_kinds.resize(edge_data.guide_nodes.size() + 1, EdgeData::SegmentKind::Straight);
+            edge_data.label_segment_index = std::clamp(edge_data.label_segment_index, 0, std::max(0, static_cast<int>(edge_data.segment_kinds.size()) - 1));
 
             data.edges.push_back(edge_data);
         }
 
-        if (!has_all_positions) {
-            assign_default_positions(data);
-        }
+        assign_default_positions(data, has_position, node_radius);
 
-        YAML::Node settings = root["settings"];
         if (settings && settings.IsMap()) {
             data.settings.node_radius = settings["node_radius"] ? settings["node_radius"].as<float>() : data.settings.node_radius;
             data.settings.line_thickness = settings["line_thickness"] ? settings["line_thickness"].as<float>() : data.settings.line_thickness;
@@ -232,6 +368,14 @@ bool save_network_yaml(const QString& path, const NetworkData& data, QString& er
             if (!node.name.isEmpty() && node.name != node.label) {
                 node_yaml["name"] = node.name.toStdString();
             }
+            const QString effective_fill_color = node.fill_color.trimmed().isEmpty()
+                ? data.settings.node_fill_color
+                : node.fill_color.trimmed();
+            const QString effective_outline_color = node.outline_color.trimmed().isEmpty()
+                ? data.settings.node_outline_color
+                : node.outline_color.trimmed();
+            node_yaml["fill_color"] = effective_fill_color.toStdString();
+            node_yaml["outline_color"] = effective_outline_color.toStdString();
             node_yaml["position"]["x"] = node.x;
             node_yaml["position"]["y"] = node.y;
             nodes.push_back(node_yaml);
@@ -250,6 +394,16 @@ bool save_network_yaml(const QString& path, const NetworkData& data, QString& er
             pair.push_back(data.nodes[edge.from_index].label.toStdString());
             pair.push_back(data.nodes[edge.to_index].label.toStdString());
             edge_yaml["nodes"] = pair;
+            if (!edge.type.trimmed().isEmpty()) {
+                edge_yaml["type"] = edge.type.toStdString();
+            }
+            if (!edge.description.trimmed().isEmpty()) {
+                edge_yaml["name"] = edge.description.toStdString();
+            }
+            const QString effective_edge_color = edge.color.trimmed().isEmpty()
+                ? data.settings.line_color
+                : edge.color.trimmed();
+            edge_yaml["color"] = effective_edge_color.toStdString();
             if (!edge.values.empty()) {
                 YAML::Node values(YAML::NodeType::Sequence);
                 for (const QString& value : edge.values) {
@@ -257,6 +411,29 @@ bool save_network_yaml(const QString& path, const NetworkData& data, QString& er
                 }
                 edge_yaml["values"] = values;
             }
+
+            edge_yaml["swap_label_sides"] = edge.swap_label_sides;
+            edge_yaml["label_segment"] = edge.label_segment_index;
+
+            if (!edge.guide_nodes.empty()) {
+                YAML::Node guide_nodes(YAML::NodeType::Sequence);
+                for (const EdgeData::GuideNode& guide_node : edge.guide_nodes) {
+                    YAML::Node guide;
+                    guide["x"] = guide_node.x;
+                    guide["y"] = guide_node.y;
+                    guide_nodes.push_back(guide);
+                }
+                edge_yaml["guide_nodes"] = guide_nodes;
+            }
+
+            if (!edge.segment_kinds.empty()) {
+                YAML::Node segment_types(YAML::NodeType::Sequence);
+                for (EdgeData::SegmentKind segment_kind : edge.segment_kinds) {
+                    segment_types.push_back(segment_kind_to_string(segment_kind).toStdString());
+                }
+                edge_yaml["segment_types"] = segment_types;
+            }
+
             edges.push_back(edge_yaml);
         }
 

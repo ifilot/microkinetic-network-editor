@@ -22,6 +22,7 @@
 #pragma once
 
 #include <QMainWindow>
+#include <QStringList>
 
 #include "network_view.h"
 
@@ -30,10 +31,12 @@ class QDoubleSpinBox;
 class QFont;
 class QComboBox;
 class QFontComboBox;
+class QFormLayout;
 class QLabel;
 class QLineEdit;
 class QPushButton;
 class QSpinBox;
+class QTableWidget;
 class LogWindow;
 
 class MainWindow : public QMainWindow {
@@ -58,12 +61,19 @@ private slots:
     void update_value_unit(const QString& unit);
     void update_selected_node_name(const QString& label);
     void reset_selected_node_name();
-    void on_selected_node_changed(int index, const QString& label);
+    void on_selection_changed();
     void pick_background_color();
-    void pick_node_fill_color();
-    void pick_node_outline_color();
-    void pick_line_color();
     void pick_label_color();
+    void pick_edge_color();
+    void pick_selection_node_fill_color();
+    void pick_selection_node_outline_color();
+    void toggle_selected_edge_swap_labels(bool checked);
+    void on_edge_segment_selected(int current_row, int current_column, int previous_row, int previous_column);
+    void on_edge_label_segment_changed(int index);
+    void add_selected_edge_guide_node();
+    void remove_selected_edge_guide_node();
+    void refresh_edge_segments_table();
+    void show_design_errors_dialog();
 
 private:
     QString initial_dialog_directory() const;
@@ -72,6 +82,7 @@ private:
     void build_menus();
     void build_settings_widget();
     void sync_controls_from_view();
+    void refresh_design_errors_summary();
 
     NetworkView* view_{nullptr};
     QString current_file_path_;
@@ -86,17 +97,36 @@ private:
     QFontComboBox* font_family_combo_{nullptr};
     QSpinBox* value_decimals_spin_{nullptr};
     QComboBox* value_unit_combo_{nullptr};
+    QLabel* selected_type_value_{nullptr};
     QLineEdit* selected_node_edit_{nullptr};
     QPushButton* reset_node_name_button_{nullptr};
+    QPushButton* edge_color_button_{nullptr};
+    QLabel* edge_color_hex_{nullptr};
+    QPushButton* selection_node_fill_color_button_{nullptr};
+    QLabel* selection_node_fill_color_hex_{nullptr};
+    QPushButton* selection_node_outline_color_button_{nullptr};
+    QLabel* selection_node_outline_color_hex_{nullptr};
+    QPushButton* swap_edge_labels_button_{nullptr};
+    QTableWidget* edge_segments_table_{nullptr};
+    QComboBox* edge_label_segment_combo_{nullptr};
+    QWidget* selected_node_name_row_{nullptr};
+    QWidget* edge_color_row_{nullptr};
+    QWidget* selected_node_fill_row_{nullptr};
+    QWidget* selected_node_outline_row_{nullptr};
+    QWidget* edge_swap_labels_row_{nullptr};
+    QWidget* edge_segments_row_{nullptr};
+    QWidget* edge_label_segment_row_{nullptr};
+    QWidget* add_guide_node_row_{nullptr};
+    QWidget* remove_guide_node_row_{nullptr};
+    QFormLayout* selection_form_{nullptr};
+    QPushButton* add_guide_node_button_{nullptr};
+    QPushButton* remove_guide_node_button_{nullptr};
+    QLabel* design_errors_label_{nullptr};
+    QPushButton* design_errors_button_{nullptr};
+    QStringList design_errors_cache_;
 
     QPushButton* bg_color_button_{nullptr};
     QLabel* bg_color_hex_{nullptr};
-    QPushButton* node_fill_color_button_{nullptr};
-    QLabel* node_fill_color_hex_{nullptr};
-    QPushButton* node_outline_color_button_{nullptr};
-    QLabel* node_outline_color_hex_{nullptr};
-    QPushButton* line_color_button_{nullptr};
-    QLabel* line_color_hex_{nullptr};
     QPushButton* label_color_button_{nullptr};
     QLabel* label_color_hex_{nullptr};
 

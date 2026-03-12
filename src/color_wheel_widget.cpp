@@ -29,7 +29,15 @@
 
 ColorWheelWidget::ColorWheelWidget(QWidget* parent)
     : QWidget(parent) {
-    setMinimumSize(200, 200);
+    setMinimumSize(minimumSizeHint());
+}
+
+QSize ColorWheelWidget::sizeHint() const {
+    return QSize(220, 220);
+}
+
+QSize ColorWheelWidget::minimumSizeHint() const {
+    return sizeHint();
 }
 
 void ColorWheelWidget::setColor(const QColor& c) {

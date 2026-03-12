@@ -10,4 +10,7 @@
         <file alias="text.vert">assets/shaders/text.vert</file>
         <file alias="text.frag">assets/shaders/text.frag</file>
     </qresource>
+    <qresource prefix="/palettes">
+        <file alias="solarized-swatches.yaml">assets/solarized-swatches.yaml</file>
+    </qresource>
 </RCC>

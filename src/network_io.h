@@ -28,14 +28,36 @@
 struct NodeData {
     QString label;
     QString name;
+    QString fill_color;
+    QString outline_color;
     float x{0.0f};
     float y{0.0f};
 };
 
 struct EdgeData {
+    struct GuideNode {
+        float x{0.0f};
+        float y{0.0f};
+    };
+
+    enum class SegmentKind {
+        Straight,
+        BendClockwise,
+        BendCounterClockwise,
+        WiggleHorizontalFirst,
+        WiggleVerticalFirst,
+    };
+
     int from_index{-1};
     int to_index{-1};
+    QString type;
+    QString description;
+    QString color;
     std::vector<QString> values;
+    bool swap_label_sides{false};
+    int label_segment_index{0};
+    std::vector<GuideNode> guide_nodes;
+    std::vector<SegmentKind> segment_kinds;
 };
 
 struct ViewSettingsData {

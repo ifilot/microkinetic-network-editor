@@ -24,13 +24,26 @@
 #include <QColor>
 #include <QOpenGLWidget>
 #include <QPoint>
+#include <QPointF>
+#include <QStringList>
 
 #include "network_io.h"
+
+class QPainterPath;
 
 class NetworkView : public QOpenGLWidget {
     Q_OBJECT
 public:
     explicit NetworkView(QWidget* parent = nullptr);
+
+
+    enum class SegmentKindUi {
+        Straight,
+        BendClockwise,
+        BendCounterClockwise,
+        WiggleHorizontalFirst,
+        WiggleVerticalFirst,
+    };
 
     void set_network(NetworkData data);
     const NetworkData& network() const;
@@ -78,18 +91,46 @@ public:
     QString value_unit() const;
 
     int selected_node_index() const;
-    QString selected_node_label() const;
+    int selected_edge_index() const;
+    bool has_node_selection() const;
+    bool has_edge_selection() const;
     QString selected_node_name() const;
     void set_selected_node_name(const QString& label);
     void reset_selected_node_name();
+
+    QString selected_item_type() const;
+    QString selected_item_label() const;
+    QColor selected_item_color() const;
+    QColor selected_node_fill_color() const;
+    QColor selected_node_outline_color() const;
+    void set_selected_item_color(const QColor& color);
+    void set_selected_node_fill_color(const QColor& color);
+    void set_selected_node_outline_color(const QColor& color);
+
+    bool selected_edge_swap_label_sides() const;
+    void set_selected_edge_swap_label_sides(bool swap);
+    bool can_select_edge_label_segment() const;
+    int selected_edge_label_segment_index() const;
+    int selected_edge_segment_count() const;
+    void set_selected_edge_label_segment_index(int index);
+    bool selected_edge_has_segments() const;
+    bool selected_edge_can_add_guide_node() const;
+    void add_selected_edge_guide_node();
+    bool selected_edge_can_remove_guide_node() const;
+    void remove_selected_edge_guide_node();
+    SegmentKindUi selected_edge_segment_kind() const;
+    void set_selected_edge_segment_kind(SegmentKindUi kind);
+    SegmentKindUi selected_edge_segment_kind_at(int segment_index) const;
+    void set_selected_edge_segment_kind_at(int segment_index, SegmentKindUi kind);
 
     ViewSettingsData current_settings() const;
     void apply_settings(const ViewSettingsData& settings);
 
     bool save_view_to_png(const QString& path, QString& error) const;
+    QStringList design_errors() const;
 
 signals:
-    void selected_node_changed(int index, const QString& name);
+    void selection_changed();
 
 protected:
     void initializeGL() override;
@@ -107,7 +148,15 @@ private:
     void snap_node_to_grid(NodeData& node) const;
     void snap_all_nodes_to_grid();
     int pick_node(const QPointF& world_point) const;
+    int pick_edge(const QPointF& world_point) const;
     QPointF to_world(const QPointF& screen_point) const;
+    static SegmentKindUi to_ui_segment_kind(EdgeData::SegmentKind kind);
+    static EdgeData::SegmentKind from_ui_segment_kind(SegmentKindUi kind);
+    std::vector<QPointF> edge_polyline_points(const EdgeData& edge) const;
+    QPointF edge_segment_midpoint(const std::vector<QPointF>& points, int segment_index, EdgeData::SegmentKind kind) const;
+    bool edge_segment_tangent(const std::vector<QPointF>& points, int segment_index, EdgeData::SegmentKind kind, QPointF& out_tangent) const;
+    void append_segment_path(QPainterPath& path, const QPointF& a, const QPointF& b, EdgeData::SegmentKind kind) const;
+
 
     static constexpr float kGridSize = 100.0f;
 
@@ -128,6 +177,8 @@ private:
     QString value_unit_{"eV"};
     int dragged_node_{-1};
     int selected_node_{-1};
+    int selected_edge_{-1};
+    int dragged_guide_node_{-1};
     QPointF drag_offset_;
     QPointF pan_offset_{0.0, 0.0};
     bool panning_{false};
