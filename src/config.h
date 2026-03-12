@@ -24,7 +24,7 @@
 #include <QString>
 
 inline constexpr const char* kProgramName = "Microkinetic Network Editor (MNE)";
-inline constexpr const char* kProgramVersion = "0.1.0";
+inline constexpr const char* kProgramVersion = "0.2.0";
 inline constexpr const char* kLicenseText =
     "This software is licensed under the GNU General Public License v3.0 (GPL-3.0-only).\n"
     "You may copy, modify, and redistribute this program, but derivative works must remain\n"
