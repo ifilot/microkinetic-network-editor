@@ -25,6 +25,7 @@
 #include <QtCore/qmath.h>
 #include <QtCore/qvariant.h>
 
+#include <memory>
 #include <sstream>
 #include <fstream>
 #include <boost/format.hpp>
@@ -42,8 +43,8 @@
 #include "shader_program_manager.h"
 #include "shader_program_types.h"
 #include "primitivebuilder.h"
-#include "../structure_loader.h"
-#include "../atom_settings.h"
+#include "structure_loader.h"
+#include "atom_settings.h"
 
 QT_FORWARD_DECLARE_CLASS(QOpenGLShaderProgram)
 
@@ -128,6 +129,11 @@ public:
     inline const auto& get_structure() const {
         return this->structure;
     }
+
+    /**
+     * @brief Set structure directly (used by cached preview loading).
+     */
+    void set_structure(const std::shared_ptr<Structure>& structure);
 
     /**
      * @brief get_euler_angles.

@@ -177,6 +177,13 @@ QString NetworkView::selected_node_name() const {
     return network_data_.nodes[selected_node_].name;
 }
 
+QString NetworkView::selected_node_structure() const {
+    if (!has_node_selection() || selected_node_ >= static_cast<int>(network_data_.nodes.size())) {
+        return QString();
+    }
+    return network_data_.nodes[selected_node_].structure;
+}
+
 void NetworkView::set_selected_node_name(const QString& name) {
     if (!has_node_selection() || selected_node_ >= static_cast<int>(network_data_.nodes.size())) {
         return;

@@ -246,6 +246,7 @@ bool load_network_yaml(const QString& path, NetworkData& out_data, QString& erro
 
             const QString maybe_name = scalar_to_qstring(map_child(yaml_node, "name"));
             node.name = maybe_name.isEmpty() ? node.label : maybe_name;
+            node.structure = scalar_to_qstring(map_child(yaml_node, "structure")).trimmed();
             node.fill_color = scalar_to_qstring(map_child(yaml_node, "fill_color")).trimmed();
             node.outline_color = scalar_to_qstring(map_child(yaml_node, "outline_color")).trimmed();
 
@@ -367,6 +368,9 @@ bool save_network_yaml(const QString& path, const NetworkData& data, QString& er
             node_yaml["label"] = node.label.toStdString();
             if (!node.name.isEmpty() && node.name != node.label) {
                 node_yaml["name"] = node.name.toStdString();
+            }
+            if (!node.structure.trimmed().isEmpty()) {
+                node_yaml["structure"] = node.structure.trimmed().toStdString();
             }
             const QString effective_fill_color = node.fill_color.trimmed().isEmpty()
                 ? data.settings.node_fill_color

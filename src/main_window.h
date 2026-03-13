@@ -38,6 +38,7 @@ class QPushButton;
 class QSpinBox;
 class QTableWidget;
 class LogWindow;
+class AnaglyphWidget;
 
 class MainWindow : public QMainWindow {
     Q_OBJECT
@@ -80,13 +81,20 @@ private:
     void remember_dialog_path(const QString& file_path);
     void set_color_chip(QPushButton* button, QLabel* hex_label, const QColor& color) const;
     void build_menus();
-    void build_settings_widget();
+    void build_properties_widget();
     void sync_controls_from_view();
     void refresh_design_errors_summary();
+    void refresh_selected_structure_preview();
+    void request_structure_preview_refresh();
+    void request_network_view_refresh();
 
     NetworkView* view_{nullptr};
     QString current_file_path_;
     QString last_directory_path_;
+    QString loaded_network_directory_;
+    QString last_loaded_structure_path_;
+    bool structure_preview_refresh_pending_{false};
+    bool network_view_refresh_pending_{false};
 
     QDoubleSpinBox* node_radius_spin_{nullptr};
     QDoubleSpinBox* line_thickness_spin_{nullptr};
@@ -119,6 +127,8 @@ private:
     QWidget* add_guide_node_row_{nullptr};
     QWidget* remove_guide_node_row_{nullptr};
     QFormLayout* selection_form_{nullptr};
+    AnaglyphWidget* selected_structure_widget_{nullptr};
+    QWidget* selected_structure_row_{nullptr};
     QPushButton* add_guide_node_button_{nullptr};
     QPushButton* remove_guide_node_button_{nullptr};
     QLabel* design_errors_label_{nullptr};
@@ -130,7 +140,7 @@ private:
     QPushButton* label_color_button_{nullptr};
     QLabel* label_color_hex_{nullptr};
 
-    QAction* settings_toggle_action_{nullptr};
+    QAction* properties_toggle_action_{nullptr};
     QAction* debug_log_action_{nullptr};
     LogWindow* log_window_{nullptr};
 };

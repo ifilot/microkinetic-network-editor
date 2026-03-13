@@ -10,7 +10,29 @@
         <file alias="text.vert">assets/shaders/text.vert</file>
         <file alias="text.frag">assets/shaders/text.frag</file>
     </qresource>
+    <qresource prefix="/assets/shaders">
+        <file alias="axes.vs">assets/shaders/axes.vs</file>
+        <file alias="axes.fs">assets/shaders/axes.fs</file>
+        <file alias="line.vs">assets/shaders/line.vs</file>
+        <file alias="line.fs">assets/shaders/line.fs</file>
+        <file alias="phong.vs">assets/shaders/phong.vs</file>
+        <file alias="phong.fs">assets/shaders/phong.fs</file>
+        <file alias="stereo.vs">assets/shaders/stereo.vs</file>
+        <file alias="stereo_anaglyph_red_cyan.fs">assets/shaders/stereo_anaglyph_red_cyan.fs</file>
+        <file alias="stereo_interlaced_checkerboard_lr.fs">assets/shaders/stereo_interlaced_checkerboard_lr.fs</file>
+        <file alias="stereo_interlaced_checkerboard_rl.fs">assets/shaders/stereo_interlaced_checkerboard_rl.fs</file>
+        <file alias="stereo_interlaced_columns_lr.fs">assets/shaders/stereo_interlaced_columns_lr.fs</file>
+        <file alias="stereo_interlaced_columns_rl.fs">assets/shaders/stereo_interlaced_columns_rl.fs</file>
+        <file alias="stereo_interlaced_rows_lr.fs">assets/shaders/stereo_interlaced_rows_lr.fs</file>
+        <file alias="stereo_interlaced_rows_rl.fs">assets/shaders/stereo_interlaced_rows_rl.fs</file>
+    </qresource>
+    <qresource prefix="/assets/models">
+        <file alias="arrow.obj">assets/models/arrow.obj</file>
+    </qresource>
+    <qresource prefix="/assets/configuration">
+        <file alias="atoms.json">assets/configuration/atoms.json</file>
+    </qresource>
     <qresource prefix="/palettes">
-        <file alias="solarized-swatches.yaml">assets/solarized-swatches.yaml</file>
+        <file alias="solarized-swatches.yaml">assets/swatches/solarized-swatches.yaml</file>
     </qresource>
 </RCC>

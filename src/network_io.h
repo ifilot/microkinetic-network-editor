@@ -28,6 +28,7 @@
 struct NodeData {
     QString label;
     QString name;
+    QString structure;
     QString fill_color;
     QString outline_color;
     float x{0.0f};

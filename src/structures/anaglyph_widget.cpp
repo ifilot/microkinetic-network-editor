@@ -6,6 +6,16 @@
 #include "anaglyph_widget.h"
 
 #include <algorithm>
+#include <QPalette>
+
+namespace {
+
+void apply_qt_window_clear_color(QOpenGLWidget* widget) {
+    const QColor window_color = widget->palette().color(QPalette::Window);
+    glClearColor(window_color.redF(), window_color.greenF(), window_color.blueF(), 1.0f);
+}
+
+}
 
 AnaglyphWidget::AnaglyphWidget(QWidget *parent)
     : QOpenGLWidget(parent) {
@@ -60,16 +70,24 @@ void AnaglyphWidget::cleanup() {
  */
 void AnaglyphWidget::slot_load_structure(int structure_id) {
     if(structure_id < 0) {
-        this->structure.reset();
+        this->set_structure(nullptr);
     } else {
         qDebug() << "Loading structure: " << this->structure_paths[structure_id] << " in AnaglyphWidget";
 
         auto path = this->structure_paths[structure_id];
-        this->structure = this->sl.load_file(path).back();
+        this->set_structure(this->sl.load_file(path).back());
+    }
+}
 
+void AnaglyphWidget::set_structure(const std::shared_ptr<Structure>& structure) {
+    this->structure = structure;
+    this->selected_atom = -1;
+
+    if (this->structure) {
         this->structure->update();
         this->pb.set_unitcell(this->structure->get_unitcell());
     }
+
     this->update();
 }
 
@@ -85,7 +103,7 @@ void AnaglyphWidget::initializeGL() {
         this->axes_models[i]->load_to_vao();
     }
 
-    glClearColor(0.976f, 0.976f, 0.976f, 1.0f);
+    apply_qt_window_clear_color(this);
 
     this->load_shaders();
 
@@ -150,6 +168,7 @@ void AnaglyphWidget::initializeGL() {
  * @brief      Render scene
  */
 void AnaglyphWidget::paintGL() {
+    apply_qt_window_clear_color(this);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     glEnable(GL_DEPTH_TEST);
     glEnable(GL_CULL_FACE);

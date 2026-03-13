@@ -95,6 +95,7 @@ public:
     bool has_node_selection() const;
     bool has_edge_selection() const;
     QString selected_node_name() const;
+    QString selected_node_structure() const;
     void set_selected_node_name(const QString& label);
     void reset_selected_node_name();
 
