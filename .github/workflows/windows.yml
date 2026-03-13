@@ -42,6 +42,7 @@ jobs:
             mingw-w64-x86_64-qt5-tools
             mingw-w64-x86_64-yaml-cpp
             mingw-w64-x86_64-nsis
+            mingw-w64-x86_64-eigen3
 
       - name: Build & Package (Windows)
         run: |
