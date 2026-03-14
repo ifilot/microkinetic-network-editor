@@ -36,6 +36,7 @@ class QLabel;
 class QLineEdit;
 class QPushButton;
 class QSpinBox;
+class QPlainTextEdit;
 class QTableWidget;
 class LogWindow;
 class AnaglyphWidget;
@@ -48,6 +49,7 @@ public:
 private slots:
     void load_yaml();
     void save_yaml();
+    void save_yaml_as();
     void save_png();
     void show_about();
     void show_debug_log();
@@ -83,6 +85,8 @@ private:
     void build_menus();
     void build_properties_widget();
     void sync_controls_from_view();
+    void update_window_title();
+    void refresh_yaml_source_widget();
     void refresh_design_errors_summary();
     void refresh_selected_structure_preview();
     void request_structure_preview_refresh();
@@ -141,6 +145,8 @@ private:
     QLabel* label_color_hex_{nullptr};
 
     QAction* properties_toggle_action_{nullptr};
+    QAction* yaml_source_toggle_action_{nullptr};
     QAction* debug_log_action_{nullptr};
+    QPlainTextEdit* yaml_source_view_{nullptr};
     LogWindow* log_window_{nullptr};
 };

@@ -87,3 +87,4 @@ struct NetworkData {
 
 bool load_network_yaml(const QString& path, NetworkData& out_data, QString& error);
 bool save_network_yaml(const QString& path, const NetworkData& data, QString& error);
+bool network_yaml_to_string(const NetworkData& data, QString& yaml_text, QString& error);

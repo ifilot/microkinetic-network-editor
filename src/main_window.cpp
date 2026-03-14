@@ -42,6 +42,7 @@
 #include <QMenu>
 #include <QMenuBar>
 #include <QMessageBox>
+#include <QPlainTextEdit>
 #include <QPushButton>
 #include <QSettings>
 #include <QSignalBlocker>
@@ -70,7 +71,7 @@ QHash<QString, std::shared_ptr<Structure>> g_loaded_structure_cache;
 
 MainWindow::MainWindow(QWidget* parent)
     : QMainWindow(parent) {
-    setWindowTitle(QString("%1 %2").arg(kProgramName, kProgramVersion));
+    update_window_title();
     setWindowIcon(QIcon(QStringLiteral(":/icons/mng-icon.png")));
     resize(1200, 760);
 
@@ -95,9 +96,13 @@ void MainWindow::build_menus() {
     load_action->setShortcut(QKeySequence::Open);
     connect(load_action, &QAction::triggered, this, &MainWindow::load_yaml);
 
-    QAction* save_action = file_menu->addAction("&Save YAML...");
+    QAction* save_action = file_menu->addAction("&Save YAML");
     save_action->setShortcut(QKeySequence::Save);
     connect(save_action, &QAction::triggered, this, &MainWindow::save_yaml);
+
+    QAction* save_as_action = file_menu->addAction("Save YAML &As...");
+    save_as_action->setShortcut(QKeySequence::SaveAs);
+    connect(save_as_action, &QAction::triggered, this, &MainWindow::save_yaml_as);
 
     QAction* save_png_action = file_menu->addAction("Save &PNG...");
     save_png_action->setShortcut(QKeySequence("Ctrl+Shift+S"));
@@ -111,6 +116,9 @@ void MainWindow::build_menus() {
     QMenu* properties_menu = menuBar()->addMenu("&Properties");
     if (properties_toggle_action_ != nullptr) {
         properties_menu->addAction(properties_toggle_action_);
+    }
+    if (yaml_source_toggle_action_ != nullptr) {
+        properties_menu->addAction(yaml_source_toggle_action_);
     }
 
     QMenu* help_menu = menuBar()->addMenu("&Help");
@@ -314,7 +322,19 @@ void MainWindow::build_properties_widget() {
     properties_toggle_action_ = properties_dock->toggleViewAction();
     properties_toggle_action_->setText("Show &Properties");
 
+    auto* yaml_source_dock = new QDockWidget("YAML Source", this);
+    yaml_source_dock->setObjectName("yaml-source-dock");
+    yaml_source_view_ = new QPlainTextEdit(yaml_source_dock);
+    yaml_source_view_->setReadOnly(true);
+    yaml_source_view_->setLineWrapMode(QPlainTextEdit::NoWrap);
+    yaml_source_dock->setWidget(yaml_source_view_);
+    addDockWidget(Qt::RightDockWidgetArea, yaml_source_dock);
+    yaml_source_toggle_action_ = yaml_source_dock->toggleViewAction();
+    yaml_source_toggle_action_->setText("Show &YAML Source");
+    yaml_source_dock->hide();
+
     sync_controls_from_view();
+    refresh_yaml_source_widget();
 }
 
 void MainWindow::load_yaml() {
@@ -354,9 +374,33 @@ void MainWindow::load_yaml() {
     loaded_network_directory_ = QFileInfo(file_path).absolutePath();
     remember_dialog_path(file_path);
     statusBar()->showMessage("Loaded: " + file_path, 4000);
+    update_window_title();
+    refresh_yaml_source_widget();
 }
 
 void MainWindow::save_yaml() {
+    if (current_file_path_.isEmpty()) {
+        save_yaml_as();
+        return;
+    }
+
+    QString error;
+    NetworkData data = view_->network();
+    data.settings = view_->current_settings();
+    data.has_settings = true;
+    if (!save_network_yaml(current_file_path_, data, error)) {
+        QMessageBox::critical(this, "Save failed", "Failed to save YAML:\n" + error);
+        return;
+    }
+
+    loaded_network_directory_ = QFileInfo(current_file_path_).absolutePath();
+    remember_dialog_path(current_file_path_);
+    statusBar()->showMessage("Saved: " + current_file_path_, 4000);
+    update_window_title();
+    refresh_yaml_source_widget();
+}
+
+void MainWindow::save_yaml_as() {
     QString starting_path = current_file_path_;
     if (starting_path.isEmpty()) {
         const QString base_dir = initial_dialog_directory();
@@ -385,9 +429,12 @@ void MainWindow::save_yaml() {
     loaded_network_directory_ = QFileInfo(file_path).absolutePath();
     remember_dialog_path(file_path);
     statusBar()->showMessage("Saved: " + file_path, 4000);
+    update_window_title();
+    refresh_yaml_source_widget();
 }
 
 void MainWindow::save_png() {
+
     const QString file_path = QFileDialog::getSaveFileName(this,
                                                            "Save PNG",
                                                            initial_dialog_directory().isEmpty() ? "network.png" : initial_dialog_directory() + "/network.png",
@@ -435,31 +482,32 @@ void MainWindow::show_debug_log() {
     log_window_->activateWindow();
 }
 
-void MainWindow::update_node_size(double value) { view_->set_node_radius(static_cast<float>(value)); }
+void MainWindow::update_node_size(double value) { view_->set_node_radius(static_cast<float>(value)); refresh_yaml_source_widget(); }
 
-void MainWindow::update_line_thickness(double value) { view_->set_line_thickness(static_cast<float>(value)); }
+void MainWindow::update_line_thickness(double value) { view_->set_line_thickness(static_cast<float>(value)); refresh_yaml_source_widget(); }
 
 void MainWindow::update_node_outline_thickness(double value) {
     view_->set_node_outline_thickness(static_cast<float>(value));
+    refresh_yaml_source_widget();
 }
 
-void MainWindow::update_font_size(double value) { view_->set_font_size(static_cast<float>(value)); }
+void MainWindow::update_font_size(double value) { view_->set_font_size(static_cast<float>(value)); refresh_yaml_source_widget(); }
 
-void MainWindow::update_label_angle(double value) { view_->set_label_angle_degrees(static_cast<float>(value)); }
+void MainWindow::update_label_angle(double value) { view_->set_label_angle_degrees(static_cast<float>(value)); refresh_yaml_source_widget(); }
 
-void MainWindow::update_font_family(const QFont& font) { view_->set_font_family(font.family()); }
+void MainWindow::update_font_family(const QFont& font) { view_->set_font_family(font.family()); refresh_yaml_source_widget(); }
 
-void MainWindow::update_node_label_distance(double value) { view_->set_node_label_distance(static_cast<float>(value)); }
+void MainWindow::update_node_label_distance(double value) { view_->set_node_label_distance(static_cast<float>(value)); refresh_yaml_source_widget(); }
 
-void MainWindow::update_value_decimals(int value) { view_->set_value_decimals(value); }
+void MainWindow::update_value_decimals(int value) { view_->set_value_decimals(value); refresh_yaml_source_widget(); }
 
-void MainWindow::update_value_unit(const QString& unit) { view_->set_value_unit(unit); }
+void MainWindow::update_value_unit(const QString& unit) { view_->set_value_unit(unit); refresh_yaml_source_widget(); }
 
-void MainWindow::update_selected_node_name(const QString& label) { view_->set_selected_node_name(label); }
+void MainWindow::update_selected_node_name(const QString& label) { view_->set_selected_node_name(label); refresh_yaml_source_widget(); }
 
-void MainWindow::reset_selected_node_name() { view_->reset_selected_node_name(); }
+void MainWindow::reset_selected_node_name() { view_->reset_selected_node_name(); refresh_yaml_source_widget(); }
 
-void MainWindow::toggle_selected_edge_swap_labels(bool checked) { view_->set_selected_edge_swap_label_sides(checked); }
+void MainWindow::toggle_selected_edge_swap_labels(bool checked) { view_->set_selected_edge_swap_label_sides(checked); refresh_yaml_source_widget(); }
 
 void MainWindow::on_edge_segment_selected(int current_row, int, int, int) {
     Q_UNUSED(current_row);
@@ -472,11 +520,12 @@ void MainWindow::on_edge_label_segment_changed(int index) {
         return;
     }
     view_->set_selected_edge_label_segment_index(index);
+    refresh_yaml_source_widget();
 }
 
-void MainWindow::add_selected_edge_guide_node() { view_->add_selected_edge_guide_node(); }
+void MainWindow::add_selected_edge_guide_node() { view_->add_selected_edge_guide_node(); refresh_yaml_source_widget(); }
 
-void MainWindow::remove_selected_edge_guide_node() { view_->remove_selected_edge_guide_node(); }
+void MainWindow::remove_selected_edge_guide_node() { view_->remove_selected_edge_guide_node(); refresh_yaml_source_widget(); }
 
 void MainWindow::refresh_edge_segments_table() {
     const bool edge_selected = view_->has_edge_selection();
@@ -502,6 +551,7 @@ void MainWindow::refresh_edge_segments_table() {
                 return;
             }
             view_->set_selected_edge_segment_kind_at(row, static_cast<NetworkView::SegmentKindUi>(index));
+            refresh_yaml_source_widget();
         });
         edge_segments_table_->setCellWidget(row, 1, shape_combo);
     }
@@ -604,6 +654,7 @@ void MainWindow::on_selection_changed() {
     add_guide_node_button_->setEnabled(edge_selected && view_->selected_edge_can_add_guide_node());
     remove_guide_node_button_->setEnabled(edge_selected && view_->selected_edge_can_remove_guide_node());
     refresh_design_errors_summary();
+    refresh_yaml_source_widget();
     request_network_view_refresh();
 
     if (properties_root != nullptr) {
@@ -741,6 +792,7 @@ void MainWindow::pick_background_color() {
 
     view_->set_background_color(dialog.color());
     set_color_chip(bg_color_button_, bg_color_hex_, dialog.color());
+    refresh_yaml_source_widget();
 }
 
 void MainWindow::pick_edge_color() {
@@ -754,6 +806,7 @@ void MainWindow::pick_edge_color() {
 
     view_->set_selected_item_color(dialog.color());
     on_selection_changed();
+    refresh_yaml_source_widget();
 }
 
 void MainWindow::pick_selection_node_fill_color() {
@@ -767,6 +820,7 @@ void MainWindow::pick_selection_node_fill_color() {
 
     view_->set_selected_node_fill_color(dialog.color());
     on_selection_changed();
+    refresh_yaml_source_widget();
 }
 
 void MainWindow::pick_selection_node_outline_color() {
@@ -780,6 +834,7 @@ void MainWindow::pick_selection_node_outline_color() {
 
     view_->set_selected_node_outline_color(dialog.color());
     on_selection_changed();
+    refresh_yaml_source_widget();
 }
 
 void MainWindow::pick_label_color() {
@@ -790,6 +845,36 @@ void MainWindow::pick_label_color() {
 
     view_->set_label_color(dialog.color());
     set_color_chip(label_color_button_, label_color_hex_, dialog.color());
+    refresh_yaml_source_widget();
+}
+
+void MainWindow::update_window_title() {
+    const QString base_title = QString("%1 %2").arg(kProgramName, kProgramVersion);
+    if (current_file_path_.isEmpty()) {
+        setWindowTitle(base_title);
+        return;
+    }
+
+    setWindowTitle(QString("%1 - %2").arg(QFileInfo(current_file_path_).fileName(), base_title));
+}
+
+void MainWindow::refresh_yaml_source_widget() {
+    if (yaml_source_view_ == nullptr || view_ == nullptr) {
+        return;
+    }
+
+    NetworkData data = view_->network();
+    data.settings = view_->current_settings();
+    data.has_settings = true;
+
+    QString yaml_text;
+    QString error;
+    if (!network_yaml_to_string(data, yaml_text, error)) {
+        yaml_source_view_->setPlainText(QString("# Failed to generate YAML source:\n%1").arg(error));
+        return;
+    }
+
+    yaml_source_view_->setPlainText(yaml_text);
 }
 
 QString MainWindow::initial_dialog_directory() const {
@@ -836,4 +921,5 @@ void MainWindow::sync_controls_from_view() {
     set_color_chip(bg_color_button_, bg_color_hex_, view_->background_color());
     set_color_chip(label_color_button_, label_color_hex_, view_->label_color());
     on_selection_changed();
+    update_window_title();
 }

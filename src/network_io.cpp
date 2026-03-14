@@ -358,8 +358,7 @@ bool load_network_yaml(const QString& path, NetworkData& out_data, QString& erro
     }
 }
 
-bool save_network_yaml(const QString& path, const NetworkData& data, QString& error) {
-    qInfo() << "Saving network YAML to" << path;
+bool network_yaml_to_string(const NetworkData& data, QString& yaml_text, QString& error) {
     try {
         YAML::Node root;
         YAML::Node nodes(YAML::NodeType::Sequence);
@@ -468,13 +467,30 @@ bool save_network_yaml(const QString& path, const NetworkData& data, QString& er
             return false;
         }
 
+        yaml_text = QString::fromUtf8(emitter.c_str());
+        return true;
+    } catch (const std::exception& ex) {
+        error = QString::fromUtf8(ex.what());
+        qWarning() << "Exception while serializing YAML" << error;
+        return false;
+    }
+}
+
+bool save_network_yaml(const QString& path, const NetworkData& data, QString& error) {
+    qInfo() << "Saving network YAML to" << path;
+    try {
+        QString yaml_text;
+        if (!network_yaml_to_string(data, yaml_text, error)) {
+            return false;
+        }
+
         std::ofstream out(path.toStdString(), std::ios::out | std::ios::trunc);
         if (!out.is_open()) {
             error = "Could not open file for writing.";
             return false;
         }
 
-        out << emitter.c_str();
+        out << yaml_text.toStdString();
         qInfo() << "Network saved";
         return true;
     } catch (const std::exception& ex) {
