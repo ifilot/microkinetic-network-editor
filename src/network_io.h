@@ -85,6 +85,42 @@ struct NetworkData {
     bool has_settings{false};
 };
 
+/**
+ * @brief Parse a network YAML file and populate node, edge, and view-setting data.
+ *
+ * The loader validates required fields, resolves edge labels to node indices, normalizes
+ * optional edge/value encodings, and assigns fallback node coordinates when positions are
+ * missing. Parsing and validation errors are returned through `error` and a false result.
+ *
+ * @param path Path to the YAML file to read from disk.
+ * @param out_data Destination structure that receives parsed network content on success.
+ * @param error Output string receiving a human-readable error when loading fails.
+ * @return True when parsing and conversion succeed; false otherwise.
+ */
 bool load_network_yaml(const QString& path, NetworkData& out_data, QString& error);
+/**
+ * @brief Serialize network data to YAML and write it to a file path.
+ *
+ * This function first converts in-memory network structures to YAML text and then writes
+ * the result with truncation semantics. If file creation or serialization fails, it stores
+ * the failure reason in `error`.
+ *
+ * @param path Destination file path for the YAML document.
+ * @param data Network content to persist.
+ * @param error Output string receiving serialization or I/O errors.
+ * @return True when the file is written successfully; false otherwise.
+ */
 bool save_network_yaml(const QString& path, const NetworkData& data, QString& error);
+/**
+ * @brief Convert network data structures into a YAML document string.
+ *
+ * The serializer emits nodes, pairwise edges, guide-node geometry, segment types, and view
+ * settings while applying effective fallback colors when per-element colors are empty. It
+ * skips edges that reference invalid node indices and reports emitter errors via `error`.
+ *
+ * @param data Source network data to serialize.
+ * @param yaml_text Output string that receives the generated YAML text on success.
+ * @param error Output string receiving serialization errors.
+ * @return True when YAML emission succeeds; false otherwise.
+ */
 bool network_yaml_to_string(const NetworkData& data, QString& yaml_text, QString& error);

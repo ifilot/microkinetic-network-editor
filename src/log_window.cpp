@@ -28,6 +28,16 @@
 #include <QTimer>
 #include <QVBoxLayout>
 
+/**
+ * @brief Construct the log window and initialize it with existing log lines.
+ *
+ * The constructor builds the scrollable text view, copies the current contents of the
+ * shared message buffer, and starts a timer that polls for new entries every second.
+ * It also applies window flags/icons used by the main application.
+ *
+ * @param log_messages Shared list that accumulates formatted log strings.
+ * @param parent Optional parent widget used for Qt ownership.
+ */
 LogWindow::LogWindow(const std::shared_ptr<QStringList>& log_messages, QWidget* parent)
     : QWidget(parent)
     , log_messages_(log_messages) {
@@ -66,6 +76,13 @@ LogWindow::LogWindow(const std::shared_ptr<QStringList>& log_messages, QWidget* 
     timer->start(1000);
 }
 
+/**
+ * @brief Append any unread log lines from the shared buffer to the text view.
+ *
+ * The method compares the current list size against `lines_read_`, inserts only the new
+ * lines, and advances the read cursor. This avoids rewriting the full log on each timer
+ * tick while keeping the UI synchronized with background logging.
+ */
 void LogWindow::update_log() {
     const int new_size = log_messages_->size();
     for (int i = lines_read_; i < new_size; ++i) {
