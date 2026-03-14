@@ -453,23 +453,32 @@ void MainWindow::save_png() {
 }
 
 void MainWindow::show_about() {
+    const QString license_html = QString::fromUtf8(kLicenseText).toHtmlEscaped().replace("\n", "<br>");
+
     QMessageBox::about(this,
                        QString("About %1").arg(kProgramName),
-                       QString("%1\nVersion %2\n\n"
-                               "Author: Ivo Filot <i.a.w.filot@tue.nl>\n"
-                               "Maintainer: Ivo Filot <i.a.w.filot@tue.nl>\n\n"
-                               "Acknowledgements:\n"
-                               "- María Presa Zubillaga\n"
-                               "- Bart Zijlstra\n"
-                               "- Min Zhang\n"
-                               "- Robin Broos\n"
-                               "- Xianxuan Ren\n\n"
-                               "License:\n%3\n\n"
-                               "Third-party dependencies:\n"
+                       QString("<h3>%1</h3>"
+                               "<p>Version %2</p>"
+                               "<p>Author: Ivo Filot &lt;<a href='mailto:i.a.w.filot@tue.nl'>i.a.w.filot@tue.nl</a>&gt;<br>"
+                               "Maintainer: Ivo Filot &lt;<a href='mailto:i.a.w.filot@tue.nl'>i.a.w.filot@tue.nl</a>&gt;</p>"
+                               "<p><b>Acknowledgements:</b><br>"
+                               "- María Presa Zubillaga<br>"
+                               "- Bart Zijlstra<br>"
+                               "- Min Zhang<br>"
+                               "- Robin Broos<br>"
+                               "- Xianxuan Ren<br>"
+                               "- Joeri van Limpt</p>"
+                               "<p><b>License:</b><br>%3</p>"
+                               "<p><b>Third-party dependencies:</b><br>"
                                "- Qt (Qt Widgets / QOpenGLWidget). Qt is available under LGPLv3/GPL/commercial terms; "
-                               "redistribution must comply with the selected Qt license terms.\n"
-                               "- yaml-cpp (YAML parser library).")
-                           .arg(kProgramName, kProgramVersion, kLicenseText));
+                               "redistribution must comply with the selected Qt license terms. "
+                               "Source code: <a href='https://code.qt.io/cgit/qt/'>https://code.qt.io/cgit/qt/</a><br>"
+                               "- yaml-cpp (YAML parser library). "
+                               "Source code: <a href='https://github.com/jbeder/yaml-cpp'>https://github.com/jbeder/yaml-cpp</a></p>"
+                               "<p><b>Project repository:</b> "
+                               "<a href='https://github.com/ifilot/microkinetic-network-editor'>"
+                               "https://github.com/ifilot/microkinetic-network-editor</a></p>")
+                           .arg(kProgramName, kProgramVersion, license_html));
 }
 
 void MainWindow::show_debug_log() {
