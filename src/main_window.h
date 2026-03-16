@@ -27,6 +27,7 @@
 #include "network_view.h"
 
 class QAction;
+class QDockWidget;
 class QDoubleSpinBox;
 class QFont;
 class QComboBox;
@@ -38,6 +39,7 @@ class QPushButton;
 class QSpinBox;
 class QPlainTextEdit;
 class QTableWidget;
+class QListWidget;
 class LogWindow;
 class AnaglyphWidget;
 
@@ -77,6 +79,7 @@ private slots:
     void remove_selected_edge_guide_node();
     void refresh_edge_segments_table();
     void show_design_errors_dialog();
+    void on_frequency_selected(int current_row);
 
 private:
     QString initial_dialog_directory() const;
@@ -133,6 +136,8 @@ private:
     QFormLayout* selection_form_{nullptr};
     AnaglyphWidget* selected_structure_widget_{nullptr};
     QWidget* selected_structure_row_{nullptr};
+    QListWidget* frequency_list_{nullptr};
+    QDockWidget* structure_dock_{nullptr};
     QPushButton* add_guide_node_button_{nullptr};
     QPushButton* remove_guide_node_button_{nullptr};
     QLabel* design_errors_label_{nullptr};

@@ -53,6 +53,7 @@ struct EdgeData {
     int to_index{-1};
     QString type;
     QString description;
+    QString structure;
     QString color;
     std::vector<QString> values;
     bool swap_label_sides{false};

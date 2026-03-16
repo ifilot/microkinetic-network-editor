@@ -18,6 +18,7 @@
 #include <QSysInfo>
 #include <QDebug>
 #include <QTimer>
+#include <QElapsedTimer>
 
 #include "qvector3d.h"
 #include "qvector2d.h"
@@ -104,6 +105,11 @@ private:
     QStringList structure_paths;
 
     int selected_atom = -1;
+    std::vector<std::vector<QVector3D>> vibration_modes_{};
+    std::vector<double> vibration_frequencies_{};
+    int active_vibration_mode_index_{-1};
+    QTimer vibration_timer_{};
+    QElapsedTimer vibration_clock_{};
 
 public:
    /**
@@ -134,6 +140,8 @@ public:
      * @brief Set structure directly (used by cached preview loading).
      */
     void set_structure(const std::shared_ptr<Structure>& structure);
+    void set_vibration_modes(const std::vector<std::vector<QVector3D>>& modes, const std::vector<double>& frequencies);
+    void set_active_vibration_mode(int mode_index);
 
     /**
      * @brief get_euler_angles.

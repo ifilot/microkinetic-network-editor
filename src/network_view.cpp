@@ -184,6 +184,13 @@ QString NetworkView::selected_node_structure() const {
     return network_data_.nodes[selected_node_].structure;
 }
 
+QString NetworkView::selected_edge_structure() const {
+    if (!has_edge_selection() || selected_edge_ >= static_cast<int>(network_data_.edges.size())) {
+        return QString();
+    }
+    return network_data_.edges[selected_edge_].structure;
+}
+
 void NetworkView::set_selected_node_name(const QString& name) {
     if (!has_node_selection() || selected_node_ >= static_cast<int>(network_data_.nodes.size())) {
         return;
@@ -1131,7 +1138,7 @@ void NetworkView::mouseReleaseEvent(QMouseEvent* event) {
 }
 
 void NetworkView::wheelEvent(QWheelEvent* event) {
-    const float factor = event->angleDelta().y() > 0 ? 1.1f : 0.9f;
+    const float factor = event->angleDelta().y() > 0 ? 0.9f : 1.1f;
     const float new_zoom = std::clamp(zoom_scale_ * factor, 0.25f, 4.0f);
     if (std::abs(new_zoom - zoom_scale_) < 0.0001f) {
         return;

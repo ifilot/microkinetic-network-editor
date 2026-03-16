@@ -383,6 +383,7 @@ bool load_network_yaml(const QString& path, NetworkData& out_data, QString& erro
             edge_data.to_index = to_it->second;
             edge_data.type = scalar_to_qstring(map_child(edge, "type")).trimmed();
             edge_data.description = scalar_to_qstring(map_child(edge, "name")).trimmed();
+            edge_data.structure = scalar_to_qstring(map_child(edge, "structure")).trimmed();
             edge_data.color = scalar_to_qstring(map_child(edge, "color")).trimmed();
 
             append_value_node(map_child(edge, "values"), edge_data.values);
@@ -516,6 +517,9 @@ bool network_yaml_to_string(const NetworkData& data, QString& yaml_text, QString
             }
             if (!edge.description.trimmed().isEmpty()) {
                 edge_yaml["name"] = edge.description.toStdString();
+            }
+            if (!edge.structure.trimmed().isEmpty()) {
+                edge_yaml["structure"] = edge.structure.trimmed().toStdString();
             }
             const QString effective_edge_color = edge.color.trimmed().isEmpty()
                 ? data.settings.line_color

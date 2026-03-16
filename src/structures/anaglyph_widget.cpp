@@ -33,7 +33,15 @@ AnaglyphWidget::AnaglyphWidget(QWidget *parent)
 
     // set default matrix orientation on start-up
     this->reset_matrices();
+
+    vibration_timer_.setInterval(33);
+    connect(&vibration_timer_, &QTimer::timeout, this, [this]() {
+        if (active_vibration_mode_index_ >= 0) {
+            this->update();
+        }
+    });
 }
+
 
 /**
  * @brief AnaglyphWidget destructor.
@@ -83,11 +91,51 @@ void AnaglyphWidget::set_structure(const std::shared_ptr<Structure>& structure) 
     this->structure = structure;
     this->selected_atom = -1;
 
+    if (this->structure == nullptr) {
+        vibration_modes_.clear();
+        vibration_frequencies_.clear();
+        active_vibration_mode_index_ = -1;
+        vibration_timer_.stop();
+    }
+
     if (this->structure) {
         this->structure->update();
         this->pb.set_unitcell(this->structure->get_unitcell());
     }
 
+    this->update();
+}
+
+void AnaglyphWidget::set_vibration_modes(const std::vector<std::vector<QVector3D>>& modes,
+                                      const std::vector<double>& frequencies) {
+    vibration_modes_ = modes;
+    vibration_frequencies_ = frequencies;
+
+    if (vibration_modes_.empty()) {
+        active_vibration_mode_index_ = -1;
+        vibration_timer_.stop();
+    } else if (active_vibration_mode_index_ < 0 ||
+               active_vibration_mode_index_ >= static_cast<int>(vibration_modes_.size())) {
+        set_active_vibration_mode(0);
+    }
+    this->update();
+}
+
+void AnaglyphWidget::set_active_vibration_mode(int mode_index) {
+    if (mode_index < 0 || mode_index >= static_cast<int>(vibration_modes_.size())) {
+        active_vibration_mode_index_ = -1;
+        vibration_timer_.stop();
+        this->update();
+        return;
+    }
+
+    active_vibration_mode_index_ = mode_index;
+    if (!vibration_clock_.isValid()) {
+        vibration_clock_.start();
+    }
+    if (!vibration_timer_.isActive()) {
+        vibration_timer_.start();
+    }
     this->update();
 }
 
@@ -237,11 +285,21 @@ void AnaglyphWidget::paint_model() {
 
         // render atoms
         this->pb.get_vao_sphere()->bind();
+        const bool has_active_mode = active_vibration_mode_index_ >= 0 &&
+            active_vibration_mode_index_ < static_cast<int>(vibration_modes_.size());
+        const float vibration_phase = has_active_mode ? std::sin(static_cast<float>(vibration_clock_.elapsed()) * 0.01f) : 0.0f;
+        std::vector<QVector3D> animated_positions(this->structure->get_atoms().size());
         for(unsigned int i=0; i<this->structure->get_atoms().size(); i++) {
             const Atom& atom = this->structure->get_atom(i);
             const unsigned int atom_index = i + 1; // atom rules are 1-based
+            QVector3D animated_offset(0.0f, 0.0f, 0.0f);
+            if (has_active_mode && i < vibration_modes_[active_vibration_mode_index_].size()) {
+                animated_offset = 0.35f * vibration_phase * vibration_modes_[active_vibration_mode_index_][i];
+            }
+            const QVector3D animated_position = QVector3D(atom.x, atom.y, atom.z) + animated_offset;
+            animated_positions[i] = animated_position;
             this->model = base;
-            this->model.translate(QVector3D(atom.x, atom.y, atom.z));
+            this->model.translate(animated_position);
             this->model.scale(AtomSettings::get().get_atom_radius_from_elnr(atom.atnr, atom_index));
             this->mvp = this->projection * this->view * this->model;
             model_shader->set_uniform("mvp", this->mvp);
@@ -260,15 +318,43 @@ void AnaglyphWidget::paint_model() {
         // render bonds
         this->pb.get_vao_cylinder()->bind();
         for(const Bond& bond: this->structure->get_bonds()) {
+            if (bond.atom_id_1 >= animated_positions.size() || bond.atom_id_2 >= animated_positions.size()) {
+                continue;
+            }
+
+            const QVector3D p1 = animated_positions[bond.atom_id_1];
+            const QVector3D p2 = animated_positions[bond.atom_id_2];
+            const QVector3D delta = p2 - p1;
+            const float length = delta.length();
+            if (length < 1e-6f) {
+                continue;
+            }
+
+            QVector3D axis;
+            float angle_degrees = 0.0f;
+            const QVector3D direction = delta / length;
+            if (std::fabs(direction.z()) > 0.999f) {
+                if (direction.z() < 0.0f) {
+                    axis = QVector3D(0.0f, 1.0f, 0.0f);
+                    angle_degrees = -180.0f;
+                } else {
+                    axis = QVector3D(0.0f, 0.0f, 1.0f);
+                    angle_degrees = 0.0f;
+                }
+            } else {
+                axis = QVector3D::crossProduct(QVector3D(0.0f, 0.0f, 1.0f), direction).normalized();
+                angle_degrees = qRadiansToDegrees(std::acos(std::clamp(direction.z(), -1.0f, 1.0f)));
+            }
+
             this->model = base;
-            this->model.translate(QVector3D(bond.atom1.x, bond.atom1.y, bond.atom1.z));
-            this->model.rotate(bond.angle / M_PI * 180.f, QVector3D(bond.axis[0], bond.axis[1], bond.axis[2]));
+            this->model.translate(p1);
+            this->model.rotate(angle_degrees, axis);
 
             float r1 = AtomSettings::get().get_atom_radius_from_elnr(bond.atom1.atnr, bond.atom_id_1);
             float r2 = AtomSettings::get().get_atom_radius_from_elnr(bond.atom2.atnr, bond.atom_id_2);
             float r = std::min(r1,r2) / 2.0f;
 
-            this->model.scale(QVector3D(r, r, bond.length));
+            this->model.scale(QVector3D(r, r, length));
             this->mvp = this->projection * this->view * this->model;
             model_shader->set_uniform("mvp", this->mvp);
             model_shader->set_uniform("model", this->model);
@@ -469,7 +555,7 @@ void AnaglyphWidget::set_zoom_level(float zoom_level) {
  * @param      event  The event
  */
 void AnaglyphWidget::wheelEvent(QWheelEvent *event) {
-    this->camera_position += event->angleDelta().y() * 0.01f * QVector3D(0.0, 0.0, 1.0);
+    this->camera_position -= event->angleDelta().y() * 0.01f * QVector3D(0.0, 0.0, 1.0);
     float ratio = (float)this->width() / (float)this->height();
     float zoom = this->camera_position[2];
     this->projection.setToIdentity();

@@ -55,7 +55,12 @@
 #include <QWidget>
 
 #include <algorithm>
+#include <cmath>
 #include <exception>
+#include <numeric>
+
+#include <Eigen/Eigenvalues>
+#include <yaml-cpp/yaml.h>
 
 #include "color_picker_dialog.h"
 #include "config.h"
@@ -67,7 +72,141 @@
 
 namespace {
 QHash<QString, std::shared_ptr<Structure>> g_loaded_structure_cache;
+
+struct VibrationModesData {
+    std::vector<std::vector<QVector3D>> modes;
+    std::vector<double> frequencies_cm_inv;
+    std::vector<bool> is_imaginary;
+};
+
+VibrationModesData vibration_modes_from_partial_hessian(const QString& structure_path, std::size_t atom_count) {
+    VibrationModesData result;
+
+    const YAML::Node root = YAML::LoadFile(structure_path.toStdString());
+    const YAML::Node partial_hessian = root["vibrations"]["partial_hessian"];
+    if (!partial_hessian) {
+        return result;
+    }
+
+    const YAML::Node dof_labels = partial_hessian["dof_labels"];
+    const YAML::Node matrix_node = partial_hessian["matrix"];
+    if (!dof_labels || !dof_labels.IsSequence() || !matrix_node || !matrix_node.IsSequence()) {
+        return result;
+    }
+
+    const int dof_count = static_cast<int>(dof_labels.size());
+    if (dof_count == 0 || static_cast<int>(matrix_node.size()) != dof_count) {
+        return result;
+    }
+
+    Eigen::MatrixXd hessian(dof_count, dof_count);
+    for (int i = 0; i < dof_count; ++i) {
+        const YAML::Node row = matrix_node[i];
+        if (!row.IsSequence() || static_cast<int>(row.size()) != dof_count) {
+            return result;
+        }
+        for (int j = 0; j < dof_count; ++j) {
+            hessian(i, j) = row[j].as<double>();
+        }
+    }
+
+    Eigen::SelfAdjointEigenSolver<Eigen::MatrixXd> solver(hessian);
+    if (solver.info() != Eigen::Success) {
+        return result;
+    }
+
+    const Eigen::VectorXd eigenvalues = solver.eigenvalues();
+    const Eigen::MatrixXd eigenvectors = solver.eigenvectors();
+
+    std::vector<std::vector<QVector3D>> all_modes(
+        dof_count, std::vector<QVector3D>(atom_count, QVector3D(0.0f, 0.0f, 0.0f)));
+    std::vector<double> all_frequencies_cm_inv(dof_count, 0.0);
+    std::vector<bool> all_imaginary(dof_count, false);
+
+    constexpr double kEvAmuA2ToCmInv = 521.47083;
+
+    for (int mode_index = 0; mode_index < dof_count; ++mode_index) {
+        for (int dof = 0; dof < dof_count; ++dof) {
+            const QString label = QString::fromStdString(dof_labels[dof].as<std::string>());
+            if (label.size() < 2) {
+                continue;
+            }
+
+            const QChar axis = label.back().toUpper();
+            bool ok = false;
+            const int atom_id = label.left(label.size() - 1).toInt(&ok);
+            if (!ok || atom_id <= 0) {
+                continue;
+            }
+
+            const std::size_t atom_index = static_cast<std::size_t>(atom_id - 1);
+            if (atom_index >= all_modes[mode_index].size()) {
+                continue;
+            }
+
+            QVector3D& atom_displacement = all_modes[mode_index][atom_index];
+            const float value = static_cast<float>(eigenvectors(dof, mode_index));
+            if (axis == 'X') {
+                atom_displacement.setX(value);
+            } else if (axis == 'Y') {
+                atom_displacement.setY(value);
+            } else if (axis == 'Z') {
+                atom_displacement.setZ(value);
+            }
+        }
+
+        float max_norm = 0.0f;
+        for (const QVector3D& v : all_modes[mode_index]) {
+            max_norm = std::max(max_norm, v.length());
+        }
+        if (max_norm > 1e-6f) {
+            for (QVector3D& v : all_modes[mode_index]) {
+                v /= max_norm;
+            }
+        }
+
+        const double eigenvalue = eigenvalues(mode_index);
+        all_imaginary[mode_index] = eigenvalue < 0.0;
+        all_frequencies_cm_inv[mode_index] = kEvAmuA2ToCmInv * std::sqrt(std::abs(eigenvalue));
+    }
+
+    std::vector<int> order;
+    order.reserve(dof_count);
+
+    // rank imaginary first
+    for (int i = 0; i < dof_count; ++i) {
+        if (all_imaginary[i]) {
+            order.push_back(i);
+        }
+    }
+    for (int i = 0; i < dof_count; ++i) {
+        if (!all_imaginary[i]) {
+            order.push_back(i);
+        }
+    }
+
+    std::stable_sort(order.begin(), order.end(), [&](int a, int b) {
+        if (all_imaginary[a] != all_imaginary[b]) {
+            return all_imaginary[a] > all_imaginary[b];
+        }
+        return all_frequencies_cm_inv[a] > all_frequencies_cm_inv[b];
+    });
+
+    result.modes.resize(order.size());
+    result.frequencies_cm_inv.resize(order.size(), 0.0);
+    result.is_imaginary.resize(order.size(), false);
+
+    for (std::size_t i = 0; i < order.size(); ++i) {
+        const int source_index = order[i];
+        result.modes[i] = all_modes[source_index];
+        result.frequencies_cm_inv[i] = all_frequencies_cm_inv[source_index];
+        result.is_imaginary[i] = all_imaginary[source_index];
+    }
+
+    return result;
 }
+
+}  // namespace
 
 MainWindow::MainWindow(QWidget* parent)
     : QMainWindow(parent) {
@@ -76,6 +215,7 @@ MainWindow::MainWindow(QWidget* parent)
     resize(1200, 760);
 
     view_ = new NetworkView(this);
+    view_->setMinimumWidth(220);
     setCentralWidget(view_);
     connect(view_, &NetworkView::selection_changed, this, &MainWindow::on_selection_changed);
 
@@ -288,19 +428,10 @@ void MainWindow::build_properties_widget() {
     selection_form_->addRow("", remove_guide_node_button_);
     connect(remove_guide_node_button_, &QPushButton::clicked, this, &MainWindow::remove_selected_edge_guide_node);
 
-    selected_structure_row_ = new QGroupBox("Structure", properties_widget);
-    {
-        auto* structure_layout = new QVBoxLayout(selected_structure_row_);
-        selected_structure_widget_ = new AnaglyphWidget(selected_structure_row_);
-        selected_structure_widget_->setMinimumHeight(220);
-        structure_layout->addWidget(selected_structure_widget_);
-    }
-
     layout->addWidget(geometry_group);
     layout->addWidget(typography_group);
     layout->addWidget(colors_group);
     layout->addWidget(selection_group);
-    layout->addWidget(selected_structure_row_);
 
     auto* design_errors_row = new QWidget(properties_widget);
     auto* design_errors_layout = new QHBoxLayout(design_errors_row);
@@ -321,6 +452,28 @@ void MainWindow::build_properties_widget() {
 
     properties_toggle_action_ = properties_dock->toggleViewAction();
     properties_toggle_action_->setText("Show &Properties");
+
+    structure_dock_ = new QDockWidget("Structures", this);
+    structure_dock_->setObjectName("structures-dock");
+    selected_structure_row_ = new QWidget(structure_dock_);
+    {
+        auto* structure_layout = new QVBoxLayout(selected_structure_row_);
+        frequency_list_ = new QListWidget(selected_structure_row_);
+        frequency_list_->setSelectionMode(QAbstractItemView::SingleSelection);
+        frequency_list_->setMinimumHeight(140);
+        structure_layout->addWidget(frequency_list_);
+        connect(frequency_list_, &QListWidget::currentRowChanged, this, &MainWindow::on_frequency_selected);
+
+        selected_structure_widget_ = new AnaglyphWidget(selected_structure_row_);
+        selected_structure_widget_->setMinimumHeight(260);
+        structure_layout->addWidget(selected_structure_widget_);
+    }
+    structure_dock_->setWidget(selected_structure_row_);
+    addDockWidget(Qt::LeftDockWidgetArea, structure_dock_);
+
+    properties_dock->setMinimumWidth(320);
+    structure_dock_->setMinimumWidth(320);
+    resizeDocks({structure_dock_, properties_dock}, {320, 320}, Qt::Horizontal);
 
     auto* yaml_source_dock = new QDockWidget("YAML Source", this);
     yaml_source_dock->setObjectName("yaml-source-dock");
@@ -587,11 +740,6 @@ void MainWindow::on_selection_changed() {
     const bool node_selected = view_->has_node_selection();
     const bool edge_selected = view_->has_edge_selection();
 
-    QWidget* const properties_root = selected_structure_row_ != nullptr ? selected_structure_row_->parentWidget() : nullptr;
-    if (properties_root != nullptr) {
-        properties_root->setUpdatesEnabled(false);
-    }
-
     selected_type_value_->setText(view_->selected_item_type().isEmpty() ? "None" :
                                   QString("%1: %2").arg(view_->selected_item_type(), view_->selected_item_label()));
 
@@ -666,10 +814,6 @@ void MainWindow::on_selection_changed() {
     refresh_yaml_source_widget();
     request_network_view_refresh();
 
-    if (properties_root != nullptr) {
-        properties_root->setUpdatesEnabled(true);
-        properties_root->update();
-    }
 }
 
 void MainWindow::request_network_view_refresh() {
@@ -699,21 +843,27 @@ void MainWindow::request_structure_preview_refresh() {
 }
 
 void MainWindow::refresh_selected_structure_preview() {
-    if (selected_structure_widget_ == nullptr) {
+    if (view_ == nullptr || selected_structure_widget_ == nullptr || selected_structure_row_ == nullptr) {
         return;
     }
 
     const bool node_selected = view_->has_node_selection();
-    const QString structure_path = node_selected ? view_->selected_node_structure().trimmed() : QString();
+    const bool edge_selected = view_->has_edge_selection();
+    const QString structure_path = node_selected ? view_->selected_node_structure().trimmed()
+                                               : (edge_selected ? view_->selected_edge_structure().trimmed() : QString());
     const bool has_structure = !structure_path.isEmpty();
 
-    selected_structure_row_->setVisible(has_structure);
+    auto clear_preview = [this]() {
+        selected_structure_widget_->set_structure(nullptr);
+        selected_structure_widget_->set_vibration_modes({}, {});
+        if (frequency_list_ != nullptr) {
+            frequency_list_->clear();
+        }
+        last_loaded_structure_path_.clear();
+    };
 
     if (!has_structure) {
-        if (!last_loaded_structure_path_.isEmpty()) {
-            selected_structure_widget_->set_structure(nullptr);
-            last_loaded_structure_path_.clear();
-        }
+        clear_preview();
         request_network_view_refresh();
         return;
     }
@@ -728,14 +878,49 @@ void MainWindow::refresh_selected_structure_preview() {
     if (!QFileInfo::exists(resolved_path)) {
         qWarning() << "Structure file does not exist:" << resolved_path;
         if (!last_loaded_structure_path_.isEmpty()) {
-            selected_structure_widget_->set_structure(nullptr);
-            last_loaded_structure_path_.clear();
+            clear_preview();
         }
         request_network_view_refresh();
         return;
     }
 
     if (resolved_path == last_loaded_structure_path_ && selected_structure_widget_->get_structure() != nullptr) {
+        const auto existing_structure = selected_structure_widget_->get_structure();
+        const auto vibration_data = vibration_modes_from_partial_hessian(resolved_path, existing_structure->get_nr_atoms());
+        selected_structure_widget_->set_vibration_modes(vibration_data.modes, vibration_data.frequencies_cm_inv);
+
+        if (frequency_list_ != nullptr) {
+            const QSignalBlocker blocker(frequency_list_);
+            frequency_list_->clear();
+            for (std::size_t mode_index = 0; mode_index < vibration_data.frequencies_cm_inv.size(); ++mode_index) {
+                const double frequency = vibration_data.frequencies_cm_inv[mode_index];
+                const bool is_imaginary = mode_index < vibration_data.is_imaginary.size() && vibration_data.is_imaginary[mode_index];
+                const QString value_text = is_imaginary
+                    ? QString("%1i cm^-1").arg(frequency, 0, 'f', 2)
+                    : QString("%1 cm^-1").arg(frequency, 0, 'f', 2);
+                frequency_list_->addItem(QString("Mode %1: %2")
+                                         .arg(static_cast<int>(mode_index + 1))
+                                         .arg(value_text));
+            }
+        }
+
+        if (frequency_list_ != nullptr && frequency_list_->count() > 0) {
+            int default_index = frequency_list_->count() - 1;
+            if (edge_selected) {
+                default_index = 0;
+                for (std::size_t i = 0; i < vibration_data.is_imaginary.size(); ++i) {
+                    if (vibration_data.is_imaginary[i]) {
+                        default_index = static_cast<int>(i);
+                        break;
+                    }
+                }
+            }
+            frequency_list_->setCurrentRow(default_index);
+            selected_structure_widget_->set_active_vibration_mode(default_index);
+        } else {
+            selected_structure_widget_->set_active_vibration_mode(-1);
+        }
+
         request_network_view_refresh();
         return;
     }
@@ -750,15 +935,62 @@ void MainWindow::refresh_selected_structure_preview() {
             g_loaded_structure_cache.insert(resolved_path, structures.back());
         }
 
-        selected_structure_widget_->set_structure(g_loaded_structure_cache.value(resolved_path));
+        const auto loaded_structure = g_loaded_structure_cache.value(resolved_path);
+        if (loaded_structure == nullptr) {
+            throw std::runtime_error("Loaded structure is null.");
+        }
+
+        selected_structure_widget_->set_structure(loaded_structure);
+
+        const auto vibration_data = vibration_modes_from_partial_hessian(resolved_path, loaded_structure->get_nr_atoms());
+        selected_structure_widget_->set_vibration_modes(vibration_data.modes, vibration_data.frequencies_cm_inv);
+
+        if (frequency_list_ != nullptr) {
+            const QSignalBlocker blocker(frequency_list_);
+            frequency_list_->clear();
+            for (std::size_t mode_index = 0; mode_index < vibration_data.frequencies_cm_inv.size(); ++mode_index) {
+                const double frequency = vibration_data.frequencies_cm_inv[mode_index];
+                const bool is_imaginary = mode_index < vibration_data.is_imaginary.size() && vibration_data.is_imaginary[mode_index];
+                const QString value_text = is_imaginary
+                    ? QString("%1i cm^-1").arg(frequency, 0, 'f', 2)
+                    : QString("%1 cm^-1").arg(frequency, 0, 'f', 2);
+                frequency_list_->addItem(QString("Mode %1: %2")
+                                         .arg(static_cast<int>(mode_index + 1))
+                                         .arg(value_text));
+            }
+        }
+
+        if (frequency_list_ != nullptr && frequency_list_->count() > 0) {
+            int default_index = frequency_list_->count() - 1;
+            if (edge_selected) {
+                default_index = 0;
+                for (std::size_t i = 0; i < vibration_data.is_imaginary.size(); ++i) {
+                    if (vibration_data.is_imaginary[i]) {
+                        default_index = static_cast<int>(i);
+                        break;
+                    }
+                }
+            }
+            frequency_list_->setCurrentRow(default_index);
+            selected_structure_widget_->set_active_vibration_mode(default_index);
+        } else {
+            selected_structure_widget_->set_active_vibration_mode(-1);
+        }
+
         last_loaded_structure_path_ = resolved_path;
     } catch (const std::exception& ex) {
-        qWarning() << "Failed to load structure for selected node:" << ex.what();
-        selected_structure_widget_->set_structure(nullptr);
-        last_loaded_structure_path_.clear();
+        qWarning() << "Failed to load structure for selected item:" << ex.what();
+        clear_preview();
     }
 
     request_network_view_refresh();
+}
+
+void MainWindow::on_frequency_selected(int current_row) {
+    if (selected_structure_widget_ == nullptr) {
+        return;
+    }
+    selected_structure_widget_->set_active_vibration_mode(current_row);
 }
 
 void MainWindow::refresh_design_errors_summary() {
