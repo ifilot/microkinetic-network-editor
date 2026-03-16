@@ -50,8 +50,6 @@ void NetworkView::set_network(NetworkData data) {
         edge.label_segment_index = std::clamp(edge.label_segment_index, 0, std::max(0, segment_count - 1));
         edge.segment_kinds.resize(static_cast<size_t>(segment_count), EdgeData::SegmentKind::Straight);
     }
-    fit_network_to_viewport();
-    snap_all_nodes_to_grid();
     selected_node_ = -1;
     selected_edge_ = -1;
     dragged_guide_node_ = -1;
@@ -1053,7 +1051,6 @@ bool NetworkView::edge_segment_tangent(const std::vector<QPointF>& points, int s
 
 void NetworkView::resizeGL(int width, int height) {
     qInfo() << "NetworkView resized" << width << "x" << height;
-    fit_network_to_viewport();
 }
 
 void NetworkView::mousePressEvent(QMouseEvent* event) {
@@ -1138,7 +1135,7 @@ void NetworkView::mouseReleaseEvent(QMouseEvent* event) {
 }
 
 void NetworkView::wheelEvent(QWheelEvent* event) {
-    const float factor = event->angleDelta().y() > 0 ? 0.9f : 1.1f;
+    const float factor = event->angleDelta().y() > 0 ? 1.1f : 0.9f;
     const float new_zoom = std::clamp(zoom_scale_ * factor, 0.25f, 4.0f);
     if (std::abs(new_zoom - zoom_scale_) < 0.0001f) {
         return;

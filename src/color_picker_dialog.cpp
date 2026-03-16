@@ -83,32 +83,58 @@ std::vector<NamedColor> loadSolarizedSwatches() {
     }
 
     const QByteArray bytes = file.readAll();
-    YAML::Node root = YAML::Load(bytes.toStdString());
+    const YAML::Node root = YAML::Load(bytes.toStdString());
+
     const YAML::Node themes = root["themes"];
-    if (!themes || !themes.IsSequence()) {
-        return swatches;
-    }
-
-    for (std::size_t i = 0; i < themes.size(); ++i) {
-        const YAML::Node theme_node = themes[i];
-        if (!theme_node || !theme_node.IsMap() || !theme_node["name"] || !theme_node["colors"]) {
-            continue;
-        }
-
-        const QString theme_name = QString::fromStdString(theme_node["name"].as<std::string>());
-        const YAML::Node colors = theme_node["colors"];
-        if (!colors.IsSequence()) {
-            continue;
-        }
-
-        for (std::size_t j = 0; j < colors.size(); ++j) {
-            const YAML::Node color_node = colors[j];
-            if (!color_node || !color_node.IsMap() || !color_node["name"] || !color_node["hex"]) {
+    if (themes && themes.IsSequence()) {
+        for (std::size_t i = 0; i < themes.size(); ++i) {
+            const YAML::Node theme_node = themes[i];
+            if (!theme_node || !theme_node.IsMap() || !theme_node["name"] || !theme_node["colors"]) {
                 continue;
             }
 
-            const QString color_name = QString::fromStdString(color_node["name"].as<std::string>());
-            const QColor color(QString::fromStdString(color_node["hex"].as<std::string>()));
+            const QString theme_name = QString::fromStdString(theme_node["name"].as<std::string>());
+            const YAML::Node colors = theme_node["colors"];
+            if (!colors.IsSequence()) {
+                continue;
+            }
+
+            for (std::size_t j = 0; j < colors.size(); ++j) {
+                const YAML::Node color_node = colors[j];
+                if (!color_node || !color_node.IsMap() || !color_node["name"] || !color_node["hex"]) {
+                    continue;
+                }
+
+                const QString color_name = QString::fromStdString(color_node["name"].as<std::string>());
+                const QColor color(QString::fromStdString(color_node["hex"].as<std::string>()));
+                if (!color.isValid()) {
+                    continue;
+                }
+
+                swatches.push_back(NamedColor{theme_name, color_name, color});
+            }
+        }
+        return swatches;
+    }
+
+    if (!root || !root.IsMap()) {
+        return swatches;
+    }
+
+    for (YAML::const_iterator it = root.begin(); it != root.end(); ++it) {
+        if (!it->first.IsScalar() || !it->second.IsMap()) {
+            continue;
+        }
+
+        const QString theme_name = QString::fromStdString(it->first.as<std::string>());
+        const YAML::Node colors = it->second;
+        for (YAML::const_iterator color_it = colors.begin(); color_it != colors.end(); ++color_it) {
+            if (!color_it->first.IsScalar() || !color_it->second.IsScalar()) {
+                continue;
+            }
+
+            const QString color_name = QString::fromStdString(color_it->first.as<std::string>());
+            const QColor color(QString::fromStdString(color_it->second.as<std::string>()));
             if (!color.isValid()) {
                 continue;
             }
