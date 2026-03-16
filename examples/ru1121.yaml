@@ -5,77 +5,77 @@ nodes:
     outline_color: "#000000"
     position:
       x: 100
-      y: 0
+      y: 100
   - label: C*
     structure: examples/ru1121_structures/c.yaml
     fill_color: "#ffffff"
     outline_color: "#000000"
     position:
       x: 200
-      y: 0
+      y: 100
   - label: O*
     structure: examples/ru1121_structures/o.yaml
     fill_color: "#ffffff"
     outline_color: "#000000"
     position:
       x: 100
-      y: 200
+      y: 300
   - label: CH*
     structure: examples/ru1121_structures/ch.yaml
     fill_color: "#ffffff"
     outline_color: "#000000"
     position:
       x: 300
-      y: 0
+      y: 100
   - label: CH2*
     structure: examples/ru1121_structures/ch2.yaml
     fill_color: "#ffffff"
     outline_color: "#000000"
     position:
       x: 400
-      y: 0
+      y: 100
   - label: CH3*
     structure: examples/ru1121_structures/ch3.yaml
     fill_color: "#ffffff"
     outline_color: "#000000"
     position:
-      x: 400
-      y: 0
+      x: 500
+      y: 100
   - label: OH*
     structure: examples/ru1121_structures/oh.yaml
     fill_color: "#ffffff"
     outline_color: "#000000"
     position:
       x: 200
-      y: 200
+      y: 300
   - label: H2O*
     structure: examples/ru1121_structures/h2o__1.yaml
     fill_color: "#ffffff"
     outline_color: "#000000"
     position:
       x: 300
-      y: 200
+      y: 300
   - label: CH4
     structure: examples/ru1121_structures/ch4.yaml
     fill_color: "#ffffff"
     outline_color: "#000000"
     position:
-      x: 500
-      y: 0
+      x: 600
+      y: 100
   - label: CO
     structure: examples/ru1121_structures/co__2.yaml
     fill_color: "#ffffff"
     outline_color: "#000000"
     position:
-      x: 0
-      y: 0
+      x: -0
+      y: 100
   - label: H2O
     structure: examples/ru1121_structures/h2o__2.yaml
     fill_color: "#ffffff"
     outline_color: "#000000"
     position:
       x: 400
-      y: 200
+      y: 300
 edges:
   - nodes:
       - CO*

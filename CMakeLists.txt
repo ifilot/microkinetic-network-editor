@@ -15,6 +15,7 @@ set(SOURCES
     src/color_picker_dialog.cpp
     src/log_window.cpp
     src/logging.cpp
+    src/vibrational_analysis.cpp
     src/structures/anaglyph_widget.cpp
     src/structures/atom.cpp
     src/structures/atom_settings.cpp
@@ -38,6 +39,7 @@ set(HEADERS
     src/log_window.h
     src/logging.h
     src/config.h
+    src/vibrational_analysis.h
     src/structures/anaglyph_widget.h
     src/structures/atom.h
     src/structures/atom_settings.h

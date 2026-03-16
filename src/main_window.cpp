@@ -59,8 +59,6 @@
 #include <exception>
 #include <numeric>
 
-#include <Eigen/Eigenvalues>
-#include <yaml-cpp/yaml.h>
 
 #include "color_picker_dialog.h"
 #include "config.h"
@@ -69,144 +67,11 @@
 #include "network_io.h"
 #include "structures/anaglyph_widget.h"
 #include "structures/structure_loader.h"
+#include "vibrational_analysis.h"
 
 namespace {
 QHash<QString, std::shared_ptr<Structure>> g_loaded_structure_cache;
-
-struct VibrationModesData {
-    std::vector<std::vector<QVector3D>> modes;
-    std::vector<double> frequencies_cm_inv;
-    std::vector<bool> is_imaginary;
-};
-
-VibrationModesData vibration_modes_from_partial_hessian(const QString& structure_path, std::size_t atom_count) {
-    VibrationModesData result;
-
-    const YAML::Node root = YAML::LoadFile(structure_path.toStdString());
-    const YAML::Node partial_hessian = root["vibrations"]["partial_hessian"];
-    if (!partial_hessian) {
-        return result;
-    }
-
-    const YAML::Node dof_labels = partial_hessian["dof_labels"];
-    const YAML::Node matrix_node = partial_hessian["matrix"];
-    if (!dof_labels || !dof_labels.IsSequence() || !matrix_node || !matrix_node.IsSequence()) {
-        return result;
-    }
-
-    const int dof_count = static_cast<int>(dof_labels.size());
-    if (dof_count == 0 || static_cast<int>(matrix_node.size()) != dof_count) {
-        return result;
-    }
-
-    Eigen::MatrixXd hessian(dof_count, dof_count);
-    for (int i = 0; i < dof_count; ++i) {
-        const YAML::Node row = matrix_node[i];
-        if (!row.IsSequence() || static_cast<int>(row.size()) != dof_count) {
-            return result;
-        }
-        for (int j = 0; j < dof_count; ++j) {
-            hessian(i, j) = row[j].as<double>();
-        }
-    }
-
-    Eigen::SelfAdjointEigenSolver<Eigen::MatrixXd> solver(hessian);
-    if (solver.info() != Eigen::Success) {
-        return result;
-    }
-
-    const Eigen::VectorXd eigenvalues = solver.eigenvalues();
-    const Eigen::MatrixXd eigenvectors = solver.eigenvectors();
-
-    std::vector<std::vector<QVector3D>> all_modes(
-        dof_count, std::vector<QVector3D>(atom_count, QVector3D(0.0f, 0.0f, 0.0f)));
-    std::vector<double> all_frequencies_cm_inv(dof_count, 0.0);
-    std::vector<bool> all_imaginary(dof_count, false);
-
-    constexpr double kEvAmuA2ToCmInv = 521.47083;
-
-    for (int mode_index = 0; mode_index < dof_count; ++mode_index) {
-        for (int dof = 0; dof < dof_count; ++dof) {
-            const QString label = QString::fromStdString(dof_labels[dof].as<std::string>());
-            if (label.size() < 2) {
-                continue;
-            }
-
-            const QChar axis = label.back().toUpper();
-            bool ok = false;
-            const int atom_id = label.left(label.size() - 1).toInt(&ok);
-            if (!ok || atom_id <= 0) {
-                continue;
-            }
-
-            const std::size_t atom_index = static_cast<std::size_t>(atom_id - 1);
-            if (atom_index >= all_modes[mode_index].size()) {
-                continue;
-            }
-
-            QVector3D& atom_displacement = all_modes[mode_index][atom_index];
-            const float value = static_cast<float>(eigenvectors(dof, mode_index));
-            if (axis == 'X') {
-                atom_displacement.setX(value);
-            } else if (axis == 'Y') {
-                atom_displacement.setY(value);
-            } else if (axis == 'Z') {
-                atom_displacement.setZ(value);
-            }
-        }
-
-        float max_norm = 0.0f;
-        for (const QVector3D& v : all_modes[mode_index]) {
-            max_norm = std::max(max_norm, v.length());
-        }
-        if (max_norm > 1e-6f) {
-            for (QVector3D& v : all_modes[mode_index]) {
-                v /= max_norm;
-            }
-        }
-
-        const double eigenvalue = eigenvalues(mode_index);
-        all_imaginary[mode_index] = eigenvalue < 0.0;
-        all_frequencies_cm_inv[mode_index] = kEvAmuA2ToCmInv * std::sqrt(std::abs(eigenvalue));
-    }
-
-    std::vector<int> order;
-    order.reserve(dof_count);
-
-    // rank imaginary first
-    for (int i = 0; i < dof_count; ++i) {
-        if (all_imaginary[i]) {
-            order.push_back(i);
-        }
-    }
-    for (int i = 0; i < dof_count; ++i) {
-        if (!all_imaginary[i]) {
-            order.push_back(i);
-        }
-    }
-
-    std::stable_sort(order.begin(), order.end(), [&](int a, int b) {
-        if (all_imaginary[a] != all_imaginary[b]) {
-            return all_imaginary[a] > all_imaginary[b];
-        }
-        return all_frequencies_cm_inv[a] > all_frequencies_cm_inv[b];
-    });
-
-    result.modes.resize(order.size());
-    result.frequencies_cm_inv.resize(order.size(), 0.0);
-    result.is_imaginary.resize(order.size(), false);
-
-    for (std::size_t i = 0; i < order.size(); ++i) {
-        const int source_index = order[i];
-        result.modes[i] = all_modes[source_index];
-        result.frequencies_cm_inv[i] = all_frequencies_cm_inv[source_index];
-        result.is_imaginary[i] = all_imaginary[source_index];
-    }
-
-    return result;
-}
-
-}  // namespace
+} // namespace
 
 MainWindow::MainWindow(QWidget* parent)
     : QMainWindow(parent) {
