@@ -1,6 +1,6 @@
 pymkmkit:
   version: 0.1.0
-  generated: '2026-02-23T19:05:30.722581Z'
+  generated: '2026-03-16T14:10:31.513423Z'
 structure:
   formula: Ru48
   n_atoms: 48
@@ -63,6 +63,8 @@ structure:
   - true
 calculation:
   code: VASP
+  version: 4.6.31
+  executed_at: '2013-03-26T15:15:28Z'
   type: optimization
   incar:
     PREC: high

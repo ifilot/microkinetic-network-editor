@@ -763,9 +763,15 @@ void MainWindow::refresh_selected_structure_preview() {
                 const QString value_text = is_imaginary
                     ? QString("%1i cm^-1").arg(frequency, 0, 'f', 2)
                     : QString("%1 cm^-1").arg(frequency, 0, 'f', 2);
-                frequency_list_->addItem(QString("Mode %1: %2")
-                                         .arg(static_cast<int>(mode_index + 1))
-                                         .arg(value_text));
+                auto* item = new QListWidgetItem(QString("Mode %1: %2")
+                                                     .arg(static_cast<int>(mode_index + 1))
+                                                     .arg(value_text));
+                if (is_imaginary) {
+                    QFont font = item->font();
+                    font.setBold(true);
+                    item->setFont(font);
+                }
+                frequency_list_->addItem(item);
             }
         }
 
@@ -819,9 +825,15 @@ void MainWindow::refresh_selected_structure_preview() {
                 const QString value_text = is_imaginary
                     ? QString("%1i cm^-1").arg(frequency, 0, 'f', 2)
                     : QString("%1 cm^-1").arg(frequency, 0, 'f', 2);
-                frequency_list_->addItem(QString("Mode %1: %2")
-                                         .arg(static_cast<int>(mode_index + 1))
-                                         .arg(value_text));
+                auto* item = new QListWidgetItem(QString("Mode %1: %2")
+                                                     .arg(static_cast<int>(mode_index + 1))
+                                                     .arg(value_text));
+                if (is_imaginary) {
+                    QFont font = item->font();
+                    font.setBold(true);
+                    item->setFont(font);
+                }
+                frequency_list_->addItem(item);
             }
         }
 

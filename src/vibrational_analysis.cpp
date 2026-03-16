@@ -11,6 +11,21 @@
 
 namespace {
 
+bool parse_atom_id_from_dof_label(const QString& label, int* atom_id) {
+    if (label.size() < 2 || atom_id == nullptr) {
+        return false;
+    }
+
+    bool ok = false;
+    const int parsed_atom_id = label.left(label.size() - 1).toInt(&ok);
+    if (!ok || parsed_atom_id <= 0) {
+        return false;
+    }
+
+    *atom_id = parsed_atom_id;
+    return true;
+}
+
 double get_atomic_mass_amu(const QString& symbol) {
     static const std::unordered_map<std::string, double> kMassByElement = {
         {"H", 1.00784}, {"He", 4.002602}, {"Li", 6.94}, {"Be", 9.0121831}, {"B", 10.81},
@@ -71,37 +86,37 @@ VibrationModesData vibration_modes_from_partial_hessian(const QString& structure
 
     std::vector<double> masses_by_atom(atom_count, 0.0);
     const YAML::Node coordinates_direct = root["structure"]["coordinates_direct"];
-    if (coordinates_direct && coordinates_direct.IsSequence()) {
-        for (std::size_t atom_index = 0; atom_index < atom_count && atom_index < coordinates_direct.size(); ++atom_index) {
-            const QString atom_line = QString::fromStdString(coordinates_direct[atom_index].as<std::string>());
-            const QStringList tokens = atom_line.split(QRegularExpression("\\s+"), Qt::SkipEmptyParts);
-            if (tokens.isEmpty()) {
-                continue;
-            }
-
-            const double mass = get_atomic_mass_amu(tokens[0]);
-            if (mass > 0.0) {
-                masses_by_atom[atom_index] = mass;
-            }
-        }
+    if (!coordinates_direct || !coordinates_direct.IsSequence()) {
+        return result;
     }
 
     std::vector<double> masses_by_dof(dof_count, 0.0);
     for (int dof = 0; dof < dof_count; ++dof) {
         const QString label = QString::fromStdString(dof_labels[dof].as<std::string>());
-        if (label.size() < 2) {
-            return result;
-        }
 
-        bool ok = false;
-        const int atom_id = label.left(label.size() - 1).toInt(&ok);
-        if (!ok || atom_id <= 0) {
+        int atom_id = 0;
+        if (!parse_atom_id_from_dof_label(label, &atom_id)) {
             return result;
         }
 
         const std::size_t atom_index = static_cast<std::size_t>(atom_id - 1);
-        if (atom_index >= masses_by_atom.size() || masses_by_atom[atom_index] <= 0.0) {
+        if (atom_index >= masses_by_atom.size() || atom_index >= coordinates_direct.size()) {
             return result;
+        }
+
+        if (masses_by_atom[atom_index] <= 0.0) {
+            const QString atom_line = QString::fromStdString(coordinates_direct[atom_index].as<std::string>());
+            const QStringList tokens = atom_line.split(QRegularExpression("\\s+"), Qt::SkipEmptyParts);
+            if (tokens.isEmpty()) {
+                return result;
+            }
+
+            const double mass = get_atomic_mass_amu(tokens[0]);
+            if (mass <= 0.0) {
+                return result;
+            }
+
+            masses_by_atom[atom_index] = mass;
         }
 
         masses_by_dof[dof] = masses_by_atom[atom_index];
@@ -141,9 +156,8 @@ VibrationModesData vibration_modes_from_partial_hessian(const QString& structure
             }
 
             const QChar axis = label.back().toUpper();
-            bool ok = false;
-            const int atom_id = label.left(label.size() - 1).toInt(&ok);
-            if (!ok || atom_id <= 0) {
+            int atom_id = 0;
+            if (!parse_atom_id_from_dof_label(label, &atom_id)) {
                 continue;
             }
 
