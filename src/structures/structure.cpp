@@ -92,7 +92,7 @@ std::string Structure::get_elements_string() const {
     std::string result;
 
     for(const auto& item : this->element_types) {
-        result += (boost::format("%s (%i); ") % item.first % item.second).str();
+        result += item.first + " (" + std::to_string(item.second) + "); ";
     }
 
     // remove last two characters

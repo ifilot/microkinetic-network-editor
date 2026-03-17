@@ -6,7 +6,6 @@
 #pragma once
 
 #include <algorithm>
-#include <boost/format.hpp>
 
 #include "matrixmath.h"
 #include "atom.h"

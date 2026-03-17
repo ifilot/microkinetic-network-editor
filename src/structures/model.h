@@ -16,7 +16,6 @@
 #include <iostream>
 #include <fstream>
 #include <exception>
-#include <boost/format.hpp>
 #include <boost/regex.hpp>
 #include <boost/lexical_cast.hpp>
 #include <boost/algorithm/string.hpp>

@@ -29,7 +29,6 @@
 #include <memory>
 #include <sstream>
 #include <fstream>
-#include <boost/format.hpp>
 #include <math.h>
 #include <string>
 
