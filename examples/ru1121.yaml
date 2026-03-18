@@ -18,7 +18,7 @@ nodes:
     fill_color: "#ffffff"
     outline_color: "#000000"
     position:
-      x: 100
+      x: 200
       y: 300
   - label: CH*
     structure: ru1121_structures/ch.yaml
@@ -46,14 +46,14 @@ nodes:
     fill_color: "#ffffff"
     outline_color: "#000000"
     position:
-      x: 200
+      x: 300
       y: 300
   - label: H2O*
     structure: ru1121_structures/h2o__1.yaml
     fill_color: "#ffffff"
     outline_color: "#000000"
     position:
-      x: 300
+      x: 400
       y: 300
   - label: CH4
     structure: ru1121_structures/ch4.yaml
@@ -74,7 +74,7 @@ nodes:
     fill_color: "#ffffff"
     outline_color: "#000000"
     position:
-      x: 400
+      x: 500
       y: 300
 edges:
   - nodes:
@@ -102,8 +102,12 @@ edges:
       - 0.7080028430897156
       - 0.7438501929936465
     swap_label_sides: false
-    label_segment: 0
+    label_segment: 1
+    guide_nodes:
+      - x: 200
+        y: 200
     segment_types:
+      - wiggle_vertical_first
       - straight
   - nodes:
       - C*
@@ -220,8 +224,8 @@ settings:
   line_thickness: 5
   node_outline_thickness: 3
   font_size: 12
-  label_angle_degrees: 90
-  node_label_distance: 14
+  label_angle_degrees: 55
+  node_label_distance: 9
   font_family: Bahnschrift SemiBold
   background_color: "#fdf6e3"
   node_fill_color: "#ffffff"

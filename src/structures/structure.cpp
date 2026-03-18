@@ -252,6 +252,9 @@ void Structure::center_geometrical() {
  */
 void Structure::build_expansion() {
     this->atoms_expansion.clear();
+    if(!this->xy_expansion_enabled_) {
+        return;
+    }
 
     VectorPosition p;
     int z = 0;

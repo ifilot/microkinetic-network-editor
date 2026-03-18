@@ -31,6 +31,7 @@ private:
     std::unordered_map<std::string, unsigned int> element_types;    // elements present in the structure
 
     bool localized = false; //flag to specify whether this calculation originates from a localized calculation
+    bool xy_expansion_enabled_ = false; // whether XY unit-cell expansion should be built
 
 public:
     /**
@@ -180,6 +181,20 @@ public:
      */
     inline size_t get_nr_atoms() const {
         return this->atoms.size();
+    }
+
+    /**
+     * @brief Enable/disable building of XY expansion atoms and bonds.
+     */
+    inline void set_xy_expansion_enabled(bool enabled) {
+        this->xy_expansion_enabled_ = enabled;
+    }
+
+    /**
+     * @brief Get whether XY expansion is enabled.
+     */
+    inline bool get_xy_expansion_enabled() const {
+        return this->xy_expansion_enabled_;
     }
 
     //********************************************

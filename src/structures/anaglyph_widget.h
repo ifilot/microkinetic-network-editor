@@ -109,6 +109,7 @@ private:
     int active_vibration_mode_index_{-1};
     QTimer vibration_timer_{};
     QElapsedTimer vibration_clock_{};
+    bool show_xy_expansion_{false};
 
 public:
    /**
@@ -141,6 +142,10 @@ public:
     void set_structure(const std::shared_ptr<Structure>& structure);
     void set_vibration_modes(const std::vector<std::vector<QVector3D>>& modes, const std::vector<double>& frequencies);
     void set_active_vibration_mode(int mode_index);
+    void set_show_xy_expansion(bool show_xy_expansion);
+    inline bool get_show_xy_expansion() const {
+        return show_xy_expansion_;
+    }
 
     /**
      * @brief get_euler_angles.

@@ -99,10 +99,20 @@ void AnaglyphWidget::set_structure(const std::shared_ptr<Structure>& structure) 
     }
 
     if (this->structure) {
+        this->structure->set_xy_expansion_enabled(this->show_xy_expansion_);
         this->structure->update();
         this->pb.set_unitcell(this->structure->get_unitcell());
     }
 
+    this->update();
+}
+
+void AnaglyphWidget::set_show_xy_expansion(bool show_xy_expansion) {
+    show_xy_expansion_ = show_xy_expansion;
+    if (this->structure) {
+        this->structure->set_xy_expansion_enabled(show_xy_expansion_);
+        this->structure->update();
+    }
     this->update();
 }
 
@@ -315,6 +325,22 @@ void AnaglyphWidget::paint_model() {
         }
         this->pb.get_vao_sphere()->release();
 
+        if(this->structure->get_xy_expansion_enabled()) {
+            this->pb.get_vao_sphere()->bind();
+            for(const Atom& atom : this->structure->get_expansion_atoms()) {
+                this->model = base;
+                this->model.translate(QVector3D(atom.x, atom.y, atom.z));
+                this->model.scale(AtomSettings::get().get_atom_radius_from_elnr(atom.atnr, 0));
+                this->mvp = this->projection * this->view * this->model;
+                model_shader->set_uniform("mvp", this->mvp);
+                model_shader->set_uniform("model", this->model);
+                QVector3D col = AtomSettings::get().get_atom_color_from_elnr(atom.atnr, 0);
+                model_shader->set_uniform("color", QVector4D(col[0],col[1],col[2],1));
+                f->glDrawElements(GL_TRIANGLES, this->pb.get_num_vertices_sphere(), GL_UNSIGNED_INT, 0);
+            }
+            this->pb.get_vao_sphere()->release();
+        }
+
         // render bonds
         this->pb.get_vao_cylinder()->bind();
         for(const Bond& bond: this->structure->get_bonds()) {
@@ -362,6 +388,51 @@ void AnaglyphWidget::paint_model() {
             f->glDrawElements(GL_TRIANGLES, this->pb.get_num_vertices_cylinder(), GL_UNSIGNED_INT, 0);
         }
         this->pb.get_vao_cylinder()->release();
+
+        if(this->structure->get_xy_expansion_enabled()) {
+            this->pb.get_vao_cylinder()->bind();
+            for(const Bond& bond: this->structure->get_expansion_bonds()) {
+                const QVector3D p1 = QVector3D(bond.atom1.x, bond.atom1.y, bond.atom1.z);
+                const QVector3D p2 = QVector3D(bond.atom2.x, bond.atom2.y, bond.atom2.z);
+                const QVector3D delta = p2 - p1;
+                const float length = delta.length();
+                if (length < 1e-6f) {
+                    continue;
+                }
+
+                QVector3D axis;
+                float angle_degrees = 0.0f;
+                const QVector3D direction = delta / length;
+                if (std::fabs(direction.z()) > 0.999f) {
+                    if (direction.z() < 0.0f) {
+                        axis = QVector3D(0.0f, 1.0f, 0.0f);
+                        angle_degrees = -180.0f;
+                    } else {
+                        axis = QVector3D(0.0f, 0.0f, 1.0f);
+                        angle_degrees = 0.0f;
+                    }
+                } else {
+                    axis = QVector3D::crossProduct(QVector3D(0.0f, 0.0f, 1.0f), direction).normalized();
+                    angle_degrees = qRadiansToDegrees(std::acos(std::clamp(direction.z(), -1.0f, 1.0f)));
+                }
+
+                this->model = base;
+                this->model.translate(p1);
+                this->model.rotate(angle_degrees, axis);
+
+                float r1 = AtomSettings::get().get_atom_radius_from_elnr(bond.atom1.atnr, 0);
+                float r2 = AtomSettings::get().get_atom_radius_from_elnr(bond.atom2.atnr, 0);
+                float r = std::min(r1,r2) / 2.0f;
+
+                this->model.scale(QVector3D(r, r, length));
+                this->mvp = this->projection * this->view * this->model;
+                model_shader->set_uniform("mvp", this->mvp);
+                model_shader->set_uniform("model", this->model);
+                model_shader->set_uniform("color", QVector4D(0.5,0.5,0.5,1));
+                f->glDrawElements(GL_TRIANGLES, this->pb.get_num_vertices_cylinder(), GL_UNSIGNED_INT, 0);
+            }
+            this->pb.get_vao_cylinder()->release();
+        }
 
         model_shader->release();
     }

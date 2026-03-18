@@ -84,6 +84,7 @@ private slots:
     void refresh_edge_segments_table();
     void show_design_errors_dialog();
     void on_frequency_selected(int current_row);
+    void toggle_xy_structure_expansion();
 
 private:
     bool load_yaml_from_path(const QString& file_path, bool remember_recent);
@@ -146,6 +147,7 @@ private:
     AnaglyphWidget* selected_structure_widget_{nullptr};
     QWidget* selected_structure_row_{nullptr};
     QListWidget* frequency_list_{nullptr};
+    QPushButton* xy_expansion_toggle_button_{nullptr};
     QDockWidget* structure_dock_{nullptr};
     QPushButton* add_guide_node_button_{nullptr};
     QPushButton* remove_guide_node_button_{nullptr};

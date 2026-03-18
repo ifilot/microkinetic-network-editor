@@ -343,6 +343,10 @@ void MainWindow::build_properties_widget() {
         selected_structure_widget_ = new AnaglyphWidget(selected_structure_row_);
         selected_structure_widget_->setMinimumHeight(260);
         structure_layout->addWidget(selected_structure_widget_);
+
+        xy_expansion_toggle_button_ = new QPushButton("Show XY Expansion", selected_structure_row_);
+        structure_layout->addWidget(xy_expansion_toggle_button_);
+        connect(xy_expansion_toggle_button_, &QPushButton::clicked, this, &MainWindow::toggle_xy_structure_expansion);
     }
     structure_dock_->setWidget(selected_structure_row_);
     addDockWidget(Qt::LeftDockWidgetArea, structure_dock_);
@@ -1024,6 +1028,16 @@ void MainWindow::on_frequency_selected(int current_row) {
         return;
     }
     selected_structure_widget_->set_active_vibration_mode(current_row);
+}
+
+void MainWindow::toggle_xy_structure_expansion() {
+    if (selected_structure_widget_ == nullptr || xy_expansion_toggle_button_ == nullptr) {
+        return;
+    }
+
+    const bool show_xy_expansion = !selected_structure_widget_->get_show_xy_expansion();
+    selected_structure_widget_->set_show_xy_expansion(show_xy_expansion);
+    xy_expansion_toggle_button_->setText(show_xy_expansion ? "Hide XY Expansion" : "Show XY Expansion");
 }
 
 void MainWindow::refresh_design_errors_summary() {
