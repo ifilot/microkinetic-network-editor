@@ -108,3 +108,21 @@ if (WIN32)
 endif()
 install(TARGETS mne RUNTIME DESTINATION . BUNDLE DESTINATION .)
 install(DIRECTORY examples DESTINATION .)
+
+# =========================
+# Doxygen Documentation Linter
+# =========================
+
+find_package(Doxygen REQUIRED)
+
+add_custom_target(lint-docs
+    # 1. Run doxygen
+    COMMAND ${DOXYGEN_EXECUTABLE} ${CMAKE_SOURCE_DIR}/Doxyfile.lint
+
+    # 2. Check warnings.log
+    COMMAND ${CMAKE_COMMAND}
+        -DLOGFILE=${CMAKE_SOURCE_DIR}/warnings.log
+        -P ${CMAKE_SOURCE_DIR}/check_doxygen.cmake
+
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+)

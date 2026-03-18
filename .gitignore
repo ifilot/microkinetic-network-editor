@@ -2,3 +2,5 @@ build
 codex.patch
 dist
 build-windows
+html
+warnings.log
