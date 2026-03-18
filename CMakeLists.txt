@@ -6,6 +6,11 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 
+get_property(MNE_IS_MULTI_CONFIG GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)
+if (NOT MNE_IS_MULTI_CONFIG AND CMAKE_BUILD_TYPE STREQUAL "")
+    set(CMAKE_BUILD_TYPE "RelWithDebInfo" CACHE STRING "Build type" FORCE)
+endif()
+
 set(SOURCES
     src/main.cpp
     src/main_window.cpp
@@ -62,7 +67,27 @@ find_package(OpenGL REQUIRED)
 
 add_executable(mne ${SOURCES} ${HEADERS})
 
-target_include_directories(mne PRIVATE ${CMAKE_SOURCE_DIR}/src)
+if (MNE_IS_MULTI_CONFIG)
+    set(MNE_BUILD_TYPE "Multi-config (${CMAKE_CONFIGURATION_TYPES})")
+    set(MNE_CONFIG_CXX_FLAGS
+        "Debug: ${CMAKE_CXX_FLAGS_DEBUG}; Release: ${CMAKE_CXX_FLAGS_RELEASE}; RelWithDebInfo: ${CMAKE_CXX_FLAGS_RELWITHDEBINFO}; MinSizeRel: ${CMAKE_CXX_FLAGS_MINSIZEREL}")
+else()
+    set(MNE_BUILD_TYPE "${CMAKE_BUILD_TYPE}")
+    string(TOUPPER "${CMAKE_BUILD_TYPE}" MNE_BUILD_TYPE_UPPER)
+    set(MNE_CONFIG_CXX_FLAGS "${CMAKE_CXX_FLAGS_${MNE_BUILD_TYPE_UPPER}}")
+endif()
+
+set(MNE_GLOBAL_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
+get_target_property(MNE_TARGET_COMPILE_OPTIONS mne COMPILE_OPTIONS)
+if (NOT MNE_TARGET_COMPILE_OPTIONS)
+    set(MNE_TARGET_COMPILE_OPTIONS "")
+else()
+    string(JOIN " " MNE_TARGET_COMPILE_OPTIONS ${MNE_TARGET_COMPILE_OPTIONS})
+endif()
+
+configure_file(src/build_info.h.in ${CMAKE_CURRENT_BINARY_DIR}/generated/build_info.h @ONLY)
+
+target_include_directories(mne PRIVATE ${CMAKE_SOURCE_DIR}/src ${CMAKE_CURRENT_BINARY_DIR}/generated)
 
 target_link_libraries(mne PRIVATE
     Qt${QT_VERSION_MAJOR}::Core

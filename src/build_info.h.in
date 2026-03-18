@@ -1,0 +1,11 @@
+#pragma once
+
+inline constexpr const char* kBuildCompilerId = "@CMAKE_CXX_COMPILER_ID@";
+inline constexpr const char* kBuildCompilerVersion = "@CMAKE_CXX_COMPILER_VERSION@";
+inline constexpr const char* kBuildCompilerPath = "@CMAKE_CXX_COMPILER@";
+
+inline constexpr const char* kBuildType = "@MNE_BUILD_TYPE@";
+inline constexpr const char* kBuildGlobalFlags = "@MNE_GLOBAL_CXX_FLAGS@";
+inline constexpr const char* kBuildConfigFlags = "@MNE_CONFIG_CXX_FLAGS@";
+inline constexpr const char* kBuildTargetCompileOptions = "@MNE_TARGET_COMPILE_OPTIONS@";
+inline constexpr const char* kBuildCompilationTimestamp = __DATE__ " " __TIME__;

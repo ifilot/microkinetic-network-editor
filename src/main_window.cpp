@@ -65,6 +65,7 @@
 
 #include "color_picker_dialog.h"
 #include "config.h"
+#include "build_info.h"
 #include "log_window.h"
 #include "logging.h"
 #include "network_io.h"
@@ -144,9 +145,11 @@ void MainWindow::build_menus() {
 
     QMenu* help_menu = menuBar()->addMenu("&Help");
     debug_log_action_ = help_menu->addAction("Show &Debug Log");
+    debug_log_action_->setShortcut(QKeySequence(Qt::Key_F2));
     connect(debug_log_action_, &QAction::triggered, this, &MainWindow::show_debug_log);
 
     QAction* about_action = help_menu->addAction("&About");
+    about_action->setShortcut(QKeySequence(Qt::Key_F1));
     connect(about_action, &QAction::triggered, this, &MainWindow::show_about);
 }
 
@@ -638,6 +641,19 @@ void MainWindow::save_png() {
 
 void MainWindow::show_about() {
     const QString license_html = QString::fromUtf8(kLicenseText).toHtmlEscaped().replace("\n", "<br>");
+    const QString compiler_info = QString("%1 %2").arg(kBuildCompilerId, kBuildCompilerVersion).toHtmlEscaped();
+    const QString compiler_path = QString::fromUtf8(kBuildCompilerPath).toHtmlEscaped();
+
+    const QString raw_build_type = QString::fromUtf8(kBuildType).trimmed();
+    const QString raw_global_flags = QString::fromUtf8(kBuildGlobalFlags).trimmed();
+    const QString raw_config_flags = QString::fromUtf8(kBuildConfigFlags).trimmed();
+    const QString raw_target_options = QString::fromUtf8(kBuildTargetCompileOptions).trimmed();
+
+    const QString build_type = (raw_build_type.isEmpty() ? QStringLiteral("Unknown") : raw_build_type).toHtmlEscaped();
+    const QString global_flags = (raw_global_flags.isEmpty() ? QStringLiteral("(none)") : raw_global_flags).toHtmlEscaped();
+    const QString config_flags = (raw_config_flags.isEmpty() ? QStringLiteral("(none)") : raw_config_flags).toHtmlEscaped();
+    const QString target_options = (raw_target_options.isEmpty() ? QStringLiteral("(none)") : raw_target_options).toHtmlEscaped();
+    const QString compilation_timestamp = QString::fromUtf8(kBuildCompilationTimestamp).toHtmlEscaped();
 
     QMessageBox::about(this,
                        QString("About %1").arg(kProgramName),
@@ -645,6 +661,14 @@ void MainWindow::show_about() {
                                "<p>Version %2</p>"
                                "<p>Author: Ivo Filot &lt;<a href='mailto:i.a.w.filot@tue.nl'>i.a.w.filot@tue.nl</a>&gt;<br>"
                                "Maintainer: Ivo Filot &lt;<a href='mailto:i.a.w.filot@tue.nl'>i.a.w.filot@tue.nl</a>&gt;</p>"
+                               "<p><b>Build information:</b><br>"
+                               "Compiler: %3<br>"
+                               "Compiler path: %4<br>"
+                               "Build type: %5<br>"
+                               "Global C++ flags: <code>%6</code><br>"
+                               "Build-type C++ flags: <code>%7</code><br>"
+                               "Target compile options: <code>%8</code><br>"
+                               "Compilation date: %9</p>"
                                "<p><b>Acknowledgements:</b><br>"
                                "- María Presa Zubillaga<br>"
                                "- Bart Zijlstra<br>"
@@ -652,7 +676,7 @@ void MainWindow::show_about() {
                                "- Robin Broos<br>"
                                "- Xianxuan Ren<br>"
                                "- Joeri van Limpt</p>"
-                               "<p><b>License:</b><br>%3</p>"
+                               "<p><b>License:</b><br>%10</p>"
                                "<p><b>Third-party dependencies:</b><br>"
                                "- Qt (Qt Widgets / QOpenGLWidget). Qt is available under LGPLv3/GPL/commercial terms; "
                                "redistribution must comply with the selected Qt license terms. "
@@ -662,7 +686,16 @@ void MainWindow::show_about() {
                                "<p><b>Project repository:</b> "
                                "<a href='https://github.com/ifilot/microkinetic-network-editor'>"
                                "https://github.com/ifilot/microkinetic-network-editor</a></p>")
-                           .arg(kProgramName, kProgramVersion, license_html));
+                           .arg(kProgramName,
+                                kProgramVersion,
+                                compiler_info,
+                                compiler_path,
+                                build_type,
+                                global_flags,
+                                config_flags,
+                                target_options,
+                                compilation_timestamp,
+                                license_html));
 }
 
 void MainWindow::show_debug_log() {
