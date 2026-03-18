@@ -81,3 +81,5 @@ set_target_properties(mne PROPERTIES
 if (WIN32)
     target_sources(mne PRIVATE mne.rc)
 endif()
+install(TARGETS mne RUNTIME DESTINATION . BUNDLE DESTINATION .)
+install(DIRECTORY examples DESTINATION .)

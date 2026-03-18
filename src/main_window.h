@@ -31,6 +31,7 @@ class QDockWidget;
 class QDoubleSpinBox;
 class QFont;
 class QComboBox;
+class QMenu;
 class QFontComboBox;
 class QFormLayout;
 class QLabel;
@@ -50,6 +51,9 @@ public:
 
 private slots:
     void load_yaml();
+    void open_recent_file();
+    void open_example_file();
+    void clear_recent_history();
     void save_yaml();
     void save_yaml_as();
     void save_png();
@@ -82,6 +86,11 @@ private slots:
     void on_frequency_selected(int current_row);
 
 private:
+    bool load_yaml_from_path(const QString& file_path, bool remember_recent);
+    void remember_recent_file(const QString& file_path);
+    void rebuild_recent_menu();
+    void rebuild_examples_menu();
+    QString find_examples_directory() const;
     QString initial_dialog_directory() const;
     void remember_dialog_path(const QString& file_path);
     void set_color_chip(QPushButton* button, QLabel* hex_label, const QColor& color) const;
@@ -150,8 +159,11 @@ private:
     QLabel* label_color_hex_{nullptr};
 
     QAction* properties_toggle_action_{nullptr};
+    QMenu* recent_menu_{nullptr};
+    QMenu* examples_menu_{nullptr};
     QAction* yaml_source_toggle_action_{nullptr};
     QAction* debug_log_action_{nullptr};
     QPlainTextEdit* yaml_source_view_{nullptr};
     LogWindow* log_window_{nullptr};
+    QStringList recent_files_;
 };

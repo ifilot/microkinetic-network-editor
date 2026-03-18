@@ -22,6 +22,7 @@
 #include "main_window.h"
 
 #include <QAction>
+#include <QCoreApplication>
 #include <QAbstractItemView>
 #include <QDockWidget>
 #include <QDir>
@@ -58,6 +59,7 @@
 #include <cmath>
 #include <exception>
 #include <numeric>
+#include <utility>
 
 
 #include "color_picker_dialog.h"
@@ -86,6 +88,7 @@ MainWindow::MainWindow(QWidget* parent)
 
     QSettings settings;
     last_directory_path_ = settings.value("io/last_directory", QString()).toString();
+    recent_files_ = settings.value("io/recent_files").toStringList();
 
     build_properties_widget();
     build_menus();
@@ -112,6 +115,14 @@ void MainWindow::build_menus() {
     QAction* save_png_action = file_menu->addAction("Save &PNG...");
     save_png_action->setShortcut(QKeySequence("Ctrl+Shift+S"));
     connect(save_png_action, &QAction::triggered, this, &MainWindow::save_png);
+
+    recent_menu_ = file_menu->addMenu("&Recent");
+    connect(recent_menu_, &QMenu::aboutToShow, this, &MainWindow::rebuild_recent_menu);
+    rebuild_recent_menu();
+
+    examples_menu_ = file_menu->addMenu("&Examples");
+    connect(examples_menu_, &QMenu::aboutToShow, this, &MainWindow::rebuild_examples_menu);
+    rebuild_examples_menu();
 
     file_menu->addSeparator();
     QAction* exit_action = file_menu->addAction("E&xit");
@@ -366,6 +377,10 @@ void MainWindow::load_yaml() {
         return;
     }
 
+    load_yaml_from_path(file_path, true);
+}
+
+bool MainWindow::load_yaml_from_path(const QString& file_path, bool remember_recent) {
     NetworkData data;
     QString error;
     if (!load_network_yaml(file_path, data, error)) {
@@ -379,7 +394,7 @@ void MainWindow::load_yaml() {
         } else {
             QMessageBox::critical(this, "Load failed", "Failed to load YAML:\n" + error);
         }
-        return;
+        return false;
     }
 
     view_->set_network(data);
@@ -388,12 +403,153 @@ void MainWindow::load_yaml() {
     }
     sync_controls_from_view();
 
-    current_file_path_ = file_path;
-    loaded_network_directory_ = QFileInfo(file_path).absolutePath();
-    remember_dialog_path(file_path);
-    statusBar()->showMessage("Loaded: " + file_path, 4000);
+    const QString absolute_file_path = QFileInfo(file_path).absoluteFilePath();
+    current_file_path_ = absolute_file_path;
+    loaded_network_directory_ = QFileInfo(absolute_file_path).absolutePath();
+    remember_dialog_path(absolute_file_path);
+    if (remember_recent) {
+        remember_recent_file(absolute_file_path);
+    }
+    statusBar()->showMessage("Loaded: " + absolute_file_path, 4000);
     update_window_title();
     refresh_yaml_source_widget();
+    return true;
+}
+
+void MainWindow::remember_recent_file(const QString& file_path) {
+    const QString normalized = QFileInfo(file_path).absoluteFilePath();
+    recent_files_.removeAll(normalized);
+    recent_files_.prepend(normalized);
+    while (recent_files_.size() > 10) {
+        recent_files_.removeLast();
+    }
+
+    QSettings settings;
+    settings.setValue("io/recent_files", recent_files_);
+    rebuild_recent_menu();
+}
+
+void MainWindow::rebuild_recent_menu() {
+    if (recent_menu_ == nullptr) {
+        return;
+    }
+
+    recent_menu_->clear();
+
+    bool has_existing_files = false;
+    for (const QString& file_path : std::as_const(recent_files_)) {
+        if (!QFileInfo::exists(file_path)) {
+            continue;
+        }
+        has_existing_files = true;
+        const QString label = QString("%1  %2").arg(recent_menu_->actions().size() + 1).arg(QFileInfo(file_path).fileName());
+        QAction* action = recent_menu_->addAction(label);
+        action->setToolTip(file_path);
+        action->setData(file_path);
+        connect(action, &QAction::triggered, this, &MainWindow::open_recent_file);
+    }
+
+    if (!has_existing_files) {
+        QAction* empty_action = recent_menu_->addAction("No recent files");
+        empty_action->setEnabled(false);
+        return;
+    }
+
+    recent_menu_->addSeparator();
+    QAction* clear_action = recent_menu_->addAction("Clear history");
+    connect(clear_action, &QAction::triggered, this, &MainWindow::clear_recent_history);
+}
+
+void MainWindow::rebuild_examples_menu() {
+    if (examples_menu_ == nullptr) {
+        return;
+    }
+
+    examples_menu_->clear();
+    const QString examples_dir_path = find_examples_directory();
+    if (examples_dir_path.isEmpty()) {
+        QAction* missing_action = examples_menu_->addAction("Examples directory not found");
+        missing_action->setEnabled(false);
+        return;
+    }
+
+    QDir examples_dir(examples_dir_path);
+    const QFileInfoList yaml_files = examples_dir.entryInfoList({"*.yaml", "*.yml"}, QDir::Files | QDir::Readable, QDir::Name);
+    if (yaml_files.isEmpty()) {
+        QAction* empty_action = examples_menu_->addAction("No YAML examples found");
+        empty_action->setEnabled(false);
+        return;
+    }
+
+    for (const QFileInfo& yaml_file : yaml_files) {
+        QAction* action = examples_menu_->addAction(yaml_file.fileName());
+        action->setToolTip(yaml_file.absoluteFilePath());
+        action->setData(yaml_file.absoluteFilePath());
+        connect(action, &QAction::triggered, this, &MainWindow::open_example_file);
+    }
+}
+
+QString MainWindow::find_examples_directory() const {
+    const QDir app_dir(QCoreApplication::applicationDirPath());
+    const QStringList candidates = {
+        app_dir.absoluteFilePath("examples"),
+        app_dir.absoluteFilePath("../examples"),
+        QDir::current().absoluteFilePath("examples"),
+        QDir::current().absoluteFilePath("../examples")
+    };
+
+    for (const QString& candidate : candidates) {
+        QFileInfo info(candidate);
+        if (info.exists() && info.isDir()) {
+            return info.absoluteFilePath();
+        }
+    }
+
+    return QString();
+}
+
+void MainWindow::open_recent_file() {
+    QAction* action = qobject_cast<QAction*>(sender());
+    if (action == nullptr) {
+        return;
+    }
+
+    const QString file_path = action->data().toString();
+    if (file_path.isEmpty()) {
+        return;
+    }
+
+    if (!QFileInfo::exists(file_path)) {
+        QMessageBox::warning(this, "Missing file", "The selected file no longer exists:\n" + file_path);
+        recent_files_.removeAll(file_path);
+        QSettings settings;
+        settings.setValue("io/recent_files", recent_files_);
+        rebuild_recent_menu();
+        return;
+    }
+
+    load_yaml_from_path(file_path, true);
+}
+
+void MainWindow::open_example_file() {
+    QAction* action = qobject_cast<QAction*>(sender());
+    if (action == nullptr) {
+        return;
+    }
+
+    const QString file_path = action->data().toString();
+    if (file_path.isEmpty()) {
+        return;
+    }
+
+    load_yaml_from_path(file_path, true);
+}
+
+void MainWindow::clear_recent_history() {
+    recent_files_.clear();
+    QSettings settings;
+    settings.setValue("io/recent_files", recent_files_);
+    rebuild_recent_menu();
 }
 
 void MainWindow::save_yaml() {
