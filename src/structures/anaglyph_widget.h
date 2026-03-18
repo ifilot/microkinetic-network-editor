@@ -317,10 +317,10 @@ protected:
     /**
      * @brief      Resize window
      *
-     * @param[in]  width   screen width
-     * @param[in]  height  screen height
+     * @param[in]  w  New widget width in pixels.
+     * @param[in]  h  New widget height in pixels.
      */
-    void resizeGL(int width, int height) Q_DECL_OVERRIDE;
+    void resizeGL(int w, int h) Q_DECL_OVERRIDE;
 
     /**
      * @brief      Parse mouse press event
@@ -346,8 +346,10 @@ protected:
     /**
      * @brief      Calculate the arcball vector for mouse rotation
      *
-     * @param[in]  x, y  The mouse position
-     * @param[out] P  The arcball vector
+     * @param[in]  x  X-position of the mouse cursor on the widget.
+     * @param[in]  y  Y-position of the mouse cursor on the widget.
+     *
+     * @return     Arcball vector corresponding to the cursor position.
      */
     QVector3D get_arcball_vector(int x, int y);
 

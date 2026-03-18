@@ -46,12 +46,7 @@ StructureRenderer::StructureRenderer(const std::shared_ptr<Scene>& _scene,
 }
 
 /**
- * @brief      Draw the structure
- *
- * @param[in]  structure       The structure
- * @param[in]  periodicity_xy  whether to draw periodicity in xy direction
- * @param[in]  periodicity_z   whether to draw periodicity in z direction
- * @param      model_shader  The model shader
+ * @brief      Draw the structure.
  */
 void StructureRenderer::draw(const Structure *structure, bool periodicity_xy, bool periodicity_z) {
     this->draw_atoms_regular(structure);

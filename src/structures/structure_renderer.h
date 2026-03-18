@@ -96,10 +96,11 @@ public:
                       const std::shared_ptr<UserAction>& _user_action);
 
     /**
-     * @brief      Draw the structure
+     * @brief      Draw the structure.
      *
-     * @param[in]  structure     The structure
-     * @param      model_shader  The model shader
+     * @param[in]  structure       The structure to draw.
+     * @param[in]  periodicity_xy  Whether to draw periodic images in XY.
+     * @param[in]  periodicity_z   Whether to draw periodic images in Z.
      */
     void draw(const Structure *structure, bool periodicity_xy = false, bool periodicity_z = false);
 

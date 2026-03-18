@@ -25,7 +25,9 @@
 /**
  * @brief      Construct model object
  *
- * @param[in]  path  Path to object file
+ * @param[in]  _positions  Vertex positions.
+ * @param[in]  _normals    Vertex normals.
+ * @param[in]  _indices    Triangle indices.
  */
 Model::Model(std::vector<glm::vec3> _positions, std::vector<glm::vec3> _normals, std::vector<unsigned int> _indices) :
     positions(_positions),

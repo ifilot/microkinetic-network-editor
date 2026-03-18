@@ -69,7 +69,7 @@ private:
     std::unique_ptr<Model> load_data_ply_binary(const std::string& path);
 
     /**
-     * @brief      Loads a ply file from hard drive stored as little endian binary
+     * @brief      Loads a PLY file from disk stored in ASCII format
      *
      * @param[in]  path   Path to file
      */

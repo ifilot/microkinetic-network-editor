@@ -153,10 +153,10 @@ void ColorWheelWidget::paintEvent(QPaintEvent* event) {
  * A press immediately maps pointer coordinates to hue/saturation and emits a color
  * update so the dialog reflects the selected point without requiring dragging.
  *
- * @param e Mouse press event carrying the clicked position.
+ * @param event Mouse press event carrying the clicked position.
  */
-void ColorWheelWidget::mousePressEvent(QMouseEvent* e) {
-    updateFromPosition(e->pos());
+void ColorWheelWidget::mousePressEvent(QMouseEvent* event) {
+    updateFromPosition(event->pos());
 }
 
 /**
@@ -165,11 +165,11 @@ void ColorWheelWidget::mousePressEvent(QMouseEvent* e) {
  * The handler only reacts during left-button drags, converting each pointer position
  * into new hue/saturation coordinates for continuous wheel interaction.
  *
- * @param e Mouse move event with cursor position and button state.
+ * @param event Mouse move event with cursor position and button state.
  */
-void ColorWheelWidget::mouseMoveEvent(QMouseEvent* e) {
-    if (e->buttons() & Qt::LeftButton) {
-        updateFromPosition(e->pos());
+void ColorWheelWidget::mouseMoveEvent(QMouseEvent* event) {
+    if (event->buttons() & Qt::LeftButton) {
+        updateFromPosition(event->pos());
     }
 }
 

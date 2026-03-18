@@ -458,8 +458,8 @@ void AnaglyphWidget::paint_model() {
 /**
  * @brief      Resize window
  *
- * @param[in]  width   screen width
- * @param[in]  height  screen height
+ * @param[in]  w  New widget width in pixels.
+ * @param[in]  h  New widget height in pixels.
  */
 void AnaglyphWidget::resizeGL(int w, int h) {
 
@@ -585,8 +585,10 @@ void AnaglyphWidget::mouseMoveEvent(QMouseEvent *event) {
 /**
  * @brief      Calculate the arcball vector for mouse rotation
  *
- * @param      int x    x-position of the mouse cursor on the screen
- * @param      int y    y-position of the mouse cursor on the screen
+ * @param[in]  x  X-position of the mouse cursor on the widget.
+ * @param[in]  y  Y-position of the mouse cursor on the widget.
+ *
+ * @return     Arcball vector corresponding to the cursor position.
  */
 QVector3D AnaglyphWidget::get_arcball_vector(int x, int y) {
     QVector3D P = QVector3D(1.0f * (float)x / (float)this->geometry().width() * 2.0f - 1.0f,
@@ -809,12 +811,11 @@ void AnaglyphWidget::reset_matrices() {
 }
 
 /**
- * @brief       calculate a ray originating based on mouse position and current view
+ * @brief      Calculate a picking ray from the mouse position and current view.
  *
- * @param       mouse position
- * @param       pointer to vector holding ray origin
- * @param       pointer to vector holding ray direction
- * @return      void
+ * @param[in]  mouse_position  Mouse position in widget coordinates.
+ * @param[out] ray_origin      Pointer receiving the ray origin in world space.
+ * @param[out] ray_direction   Pointer receiving the ray direction in world space.
  */
 void AnaglyphWidget::calculate_ray(const QPoint& mouse_position, QVector3D* ray_origin, QVector3D* ray_direction) {
     const float screen_width = (float)this->width();

@@ -220,11 +220,12 @@ void AtomSettings::load() {
 }
 
 /**
- * @brief      Get the atomic radius of an element
+ * @brief      Get the atomic radius of an element.
  *
- * @param[in]  elname  Element name
+ * @param[in]  elname      Element symbol or name.
+ * @param[in]  atom_index  Zero-based atom index for index-specific overrides.
  *
- * @return     atomic radius
+ * @return     Atomic radius.
  */
 float AtomSettings::get_atom_radius(const std::string& elname, unsigned int atom_index) const {
     std::string radius = this->root.get<std::string>("atoms.radii." + elname);
@@ -239,11 +240,12 @@ float AtomSettings::get_atom_radius(const std::string& elname, unsigned int atom
 }
 
 /**
- * @brief      Get the color of an element
+ * @brief      Get the color of an element.
  *
- * @param[in]  elname  Element name
+ * @param[in]  elname      Element symbol or name.
+ * @param[in]  atom_index  Zero-based atom index for index-specific overrides.
  *
- * @return     atomic radius
+ * @return     Atom color in hexadecimal string format.
  */
 std::string AtomSettings::get_atom_color(const std::string& elname, unsigned int atom_index) const {
     std::string result = this->root.get<std::string>("atoms.colors." + elname);
@@ -257,11 +259,12 @@ std::string AtomSettings::get_atom_color(const std::string& elname, unsigned int
 }
 
 /**
- * @brief      Get the atomic radius of an element
+ * @brief      Get the atomic radius of an element by atomic number.
  *
- * @param[in]  elname  Element name
+ * @param[in]  elnr        Atomic number.
+ * @param[in]  atom_index  Zero-based atom index for index-specific overrides.
  *
- * @return     atomic radius
+ * @return     Atomic radius.
  */
 float AtomSettings::get_atom_radius_from_elnr(unsigned int elnr, unsigned int atom_index) const {
     return this->get_atom_radius(this->get_name_from_elnr(elnr), atom_index);
@@ -303,7 +306,12 @@ std::string AtomSettings::get_name_from_elnr(unsigned int elnr) const {
 }
 
 /**
- * @brief get_atom_color_from_elnr.
+ * @brief      Gets the color from element number.
+ *
+ * @param[in]  elnr        Atomic number.
+ * @param[in]  atom_index  Zero-based atom index for index-specific overrides.
+ *
+ * @return     Atom color as an RGB vector.
  */
 QVector3D AtomSettings::get_atom_color_from_elnr(unsigned int elnr, unsigned int atom_index) const {
     return this->hexcode_to_vector3d(this->get_atom_color(this->get_name_from_elnr(elnr), atom_index).substr(1,6));

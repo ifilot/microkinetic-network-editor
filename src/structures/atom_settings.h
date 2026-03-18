@@ -108,27 +108,30 @@ public:
     /**
      * @brief      Get the atomic radius of an element
      *
-     * @param[in]  elname  Element name
+     * @param[in]  elname      Element symbol or name.
+     * @param[in]  atom_index  Zero-based atom index for index-specific overrides.
      *
-     * @return     atomic radius
+     * @return     Atomic radius.
      */
     float get_atom_radius(const std::string& elname, unsigned int atom_index = 0) const;
 
     /**
      * @brief      Get the color of an element
      *
-     * @param[in]  elname  Element name
+     * @param[in]  elname      Element symbol or name.
+     * @param[in]  atom_index  Zero-based atom index for index-specific overrides.
      *
-     * @return     atomic radius
+     * @return     Atom color in hexadecimal string format.
      */
     std::string get_atom_color(const std::string& elname, unsigned int atom_index = 0) const;
 
     /**
-     * @brief      Get the atomic radius of an element
+     * @brief      Get the atomic radius of an element by atomic number
      *
-     * @param[in]  elname  Element name
+     * @param[in]  elnr        Atomic number.
+     * @param[in]  atom_index  Zero-based atom index for index-specific overrides.
      *
-     * @return     atomic radius
+     * @return     Atomic radius.
      */
     float get_atom_radius_from_elnr(unsigned int elnr, unsigned int atom_index = 0) const;
 
@@ -163,9 +166,10 @@ public:
     /**
      * @brief      Gets the color from element number.
      *
-     * @param[in]  elnr  The elnr
+     * @param[in]  elnr        Atomic number.
+     * @param[in]  atom_index  Zero-based atom index for index-specific overrides.
      *
-     * @return     The name from elnr.
+     * @return     Atom color as an RGB vector.
      */
     QVector3D get_atom_color_from_elnr(unsigned int elnr, unsigned int atom_index = 0) const;
 

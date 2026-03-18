@@ -69,11 +69,12 @@ private:
 public:
     /**
      * @brief Constructor function
-     * @param vector of vertices
-     * @param vector of normals
-     * @param vector of indices
+     *
+     * @param[in] _positions  Vertex positions.
+     * @param[in] _normals    Vertex normals.
+     * @param[in] _indices    Triangle indices.
      */
-    Model(std::vector<glm::vec3> positions, std::vector<glm::vec3> normals, std::vector<unsigned int> indices);
+    Model(std::vector<glm::vec3> _positions, std::vector<glm::vec3> _normals, std::vector<unsigned int> _indices);
 
     /**
      * @brief add_instance.
@@ -99,11 +100,12 @@ public:
 
     /**
      * @brief Overwrite instance properties
-     * @param id
-     * @param scale vector
-     * @param rotation matrix
-     * @param translation vector
-     * @param color vector
+     *
+     * @param[in] id            Instance identifier.
+     * @param[in] _scale        Scale vector.
+     * @param[in] _rotation     Rotation matrix.
+     * @param[in] _translation  Translation vector.
+     * @param[in] _color        RGBA color vector.
      */
     inline void set_instance_properties(size_t id,
                              const glm::vec3& _scale,

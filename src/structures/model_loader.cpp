@@ -260,9 +260,7 @@ std::unique_ptr<Model> ModelLoader::load_data_ply_binary(const std::string& path
 }
 
 /**
- * @brief      Loads a ply file from hard drive stored in ascii format
- *
- * @param[in]  path   The path
+ * @brief      Loads a PLY file stored in ASCII format.
  */
 std::unique_ptr<Model> ModelLoader::load_data_ply_ascii(const std::string& path) {
     std::ifstream file(path);
