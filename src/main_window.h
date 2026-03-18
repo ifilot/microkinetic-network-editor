@@ -59,11 +59,13 @@ private slots:
     void save_png();
     void show_about();
     void show_debug_log();
+    void adjust_all_node_label_angles();
     void update_node_size(double value);
     void update_line_thickness(double value);
     void update_node_outline_thickness(double value);
     void update_font_size(double value);
     void update_label_angle(double value);
+    void update_selected_node_label_angle(double value);
     void update_font_family(const QFont& font);
     void update_node_label_distance(double value);
     void update_value_decimals(int value);
@@ -135,6 +137,7 @@ private:
     QTableWidget* edge_segments_table_{nullptr};
     QComboBox* edge_label_segment_combo_{nullptr};
     QWidget* selected_node_name_row_{nullptr};
+    QWidget* selected_node_label_angle_row_{nullptr};
     QWidget* edge_color_row_{nullptr};
     QWidget* selected_node_fill_row_{nullptr};
     QWidget* selected_node_outline_row_{nullptr};

@@ -80,6 +80,9 @@ public:
 
     void set_label_angle_degrees(float degrees);
     float label_angle_degrees() const;
+    void set_selected_node_label_angle_degrees(float degrees);
+    float selected_node_label_angle_degrees() const;
+    void set_all_node_label_angles(float degrees);
 
     void set_node_label_distance(float distance);
     float node_label_distance() const;
@@ -144,6 +147,8 @@ protected:
     void wheelEvent(QWheelEvent* event) override;
 
 private:
+    bool has_valid_node_selection() const;
+    bool has_valid_edge_selection() const;
     void draw_scene(QPainter& painter, const QRectF& world_visible_rect) const;
     QRectF scene_bounds() const;
     void fit_network_to_viewport();

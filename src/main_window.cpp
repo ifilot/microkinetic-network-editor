@@ -27,6 +27,7 @@
 #include <QDockWidget>
 #include <QDir>
 #include <QDialog>
+#include <QDialogButtonBox>
 #include <QSpinBox>
 #include <QComboBox>
 #include <QDoubleSpinBox>
@@ -137,6 +138,10 @@ void MainWindow::build_menus() {
         properties_menu->addAction(yaml_source_toggle_action_);
     }
 
+    QMenu* adjust_menu = menuBar()->addMenu("&Adjust");
+    QAction* adjust_nodes_action = adjust_menu->addAction("&Nodes...");
+    connect(adjust_nodes_action, &QAction::triggered, this, &MainWindow::adjust_all_node_label_angles);
+
     QMenu* help_menu = menuBar()->addMenu("&Help");
     debug_log_action_ = help_menu->addAction("Show &Debug Log");
     connect(debug_log_action_, &QAction::triggered, this, &MainWindow::show_debug_log);
@@ -181,12 +186,6 @@ void MainWindow::build_properties_widget() {
     font_size_spin_->setRange(6.0, 64.0);
     typography_form->addRow("Font size", font_size_spin_);
     connect(font_size_spin_, qOverload<double>(&QDoubleSpinBox::valueChanged), this, &MainWindow::update_font_size);
-
-    label_angle_spin_ = new QDoubleSpinBox(properties_widget);
-    label_angle_spin_->setRange(-180.0, 180.0);
-    label_angle_spin_->setSingleStep(5.0);
-    typography_form->addRow("Node label angle", label_angle_spin_);
-    connect(label_angle_spin_, qOverload<double>(&QDoubleSpinBox::valueChanged), this, &MainWindow::update_label_angle);
 
     label_distance_spin_ = new QDoubleSpinBox(properties_widget);
     label_distance_spin_->setRange(0.0, 100.0);
@@ -243,6 +242,13 @@ void MainWindow::build_properties_widget() {
     selection_form_->addRow("Node name", selected_node_name_row_);
     connect(selected_node_edit_, &QLineEdit::textEdited, this, &MainWindow::update_selected_node_name);
     connect(reset_node_name_button_, &QPushButton::clicked, this, &MainWindow::reset_selected_node_name);
+
+    label_angle_spin_ = new QDoubleSpinBox(properties_widget);
+    label_angle_spin_->setRange(-180.0, 180.0);
+    label_angle_spin_->setSingleStep(5.0);
+    selected_node_label_angle_row_ = label_angle_spin_;
+    selection_form_->addRow("Node label angle", label_angle_spin_);
+    connect(label_angle_spin_, qOverload<double>(&QDoubleSpinBox::valueChanged), this, &MainWindow::update_selected_node_label_angle);
 
     auto add_selection_color_row = [this, properties_widget](const QString& label, QPushButton*& button, QLabel*& hex_label, QWidget*& row_widget, const char* slot) {
         row_widget = new QWidget(properties_widget);
@@ -669,6 +675,44 @@ void MainWindow::show_debug_log() {
     log_window_->activateWindow();
 }
 
+void MainWindow::adjust_all_node_label_angles() {
+    QDialog dialog(this);
+    dialog.setWindowTitle("Adjust node label angles");
+    auto* layout = new QVBoxLayout(&dialog);
+
+    auto* form_layout = new QFormLayout();
+    auto* angle_spin = new QDoubleSpinBox(&dialog);
+    angle_spin->setRange(-180.0, 180.0);
+    angle_spin->setSingleStep(5.0);
+    angle_spin->setValue(view_->label_angle_degrees());
+    form_layout->addRow("Angle (degrees)", angle_spin);
+    layout->addLayout(form_layout);
+
+    auto* button_box = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
+    layout->addWidget(button_box);
+    connect(button_box, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
+    connect(button_box, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+
+    if (dialog.exec() != QDialog::Accepted) {
+        return;
+    }
+
+    QMessageBox confirmation(this);
+    confirmation.setIcon(QMessageBox::Warning);
+    confirmation.setWindowTitle("Overwrite all node angles?");
+    confirmation.setText("This will overwrite the label-angle setting for all nodes.");
+    confirmation.setInformativeText("Are you sure you want to continue?");
+    confirmation.setStandardButtons(QMessageBox::Yes | QMessageBox::Cancel);
+    confirmation.setDefaultButton(QMessageBox::Cancel);
+    if (confirmation.exec() != QMessageBox::Yes) {
+        return;
+    }
+
+    view_->set_all_node_label_angles(static_cast<float>(angle_spin->value()));
+    on_selection_changed();
+    refresh_yaml_source_widget();
+}
+
 void MainWindow::update_node_size(double value) { view_->set_node_radius(static_cast<float>(value)); refresh_yaml_source_widget(); }
 
 void MainWindow::update_line_thickness(double value) { view_->set_line_thickness(static_cast<float>(value)); refresh_yaml_source_widget(); }
@@ -681,6 +725,14 @@ void MainWindow::update_node_outline_thickness(double value) {
 void MainWindow::update_font_size(double value) { view_->set_font_size(static_cast<float>(value)); refresh_yaml_source_widget(); }
 
 void MainWindow::update_label_angle(double value) { view_->set_label_angle_degrees(static_cast<float>(value)); refresh_yaml_source_widget(); }
+
+void MainWindow::update_selected_node_label_angle(double value) {
+    if (!view_->has_node_selection()) {
+        return;
+    }
+    view_->set_selected_node_label_angle_degrees(static_cast<float>(value));
+    refresh_yaml_source_widget();
+}
 
 void MainWindow::update_font_family(const QFont& font) { view_->set_font_family(font.family()); refresh_yaml_source_widget(); }
 
@@ -777,6 +829,15 @@ void MainWindow::on_selection_changed() {
 
     selected_node_name_row_->setVisible(node_selected);
     if (QWidget* label = selection_form_->labelForField(selected_node_name_row_)) {
+        label->setVisible(node_selected);
+    }
+    {
+        const QSignalBlocker blocker(label_angle_spin_);
+        label_angle_spin_->setValue(node_selected ? view_->selected_node_label_angle_degrees() : view_->label_angle_degrees());
+    }
+    label_angle_spin_->setEnabled(node_selected);
+    selected_node_label_angle_row_->setVisible(node_selected);
+    if (QWidget* label = selection_form_->labelForField(selected_node_label_angle_row_)) {
         label->setVisible(node_selected);
     }
 
@@ -910,46 +971,51 @@ void MainWindow::refresh_selected_structure_preview() {
     }
 
     if (resolved_path == last_loaded_structure_path_ && selected_structure_widget_->get_structure() != nullptr) {
-        const auto existing_structure = selected_structure_widget_->get_structure();
-        const auto vibration_data = vibration_modes_from_partial_hessian(resolved_path, existing_structure->get_nr_atoms());
-        selected_structure_widget_->set_vibration_modes(vibration_data.modes, vibration_data.frequencies_cm_inv);
+        try {
+            const auto existing_structure = selected_structure_widget_->get_structure();
+            const auto vibration_data = vibration_modes_from_partial_hessian(resolved_path, existing_structure->get_nr_atoms());
+            selected_structure_widget_->set_vibration_modes(vibration_data.modes, vibration_data.frequencies_cm_inv);
 
-        if (frequency_list_ != nullptr) {
-            const QSignalBlocker blocker(frequency_list_);
-            frequency_list_->clear();
-            for (std::size_t mode_index = 0; mode_index < vibration_data.frequencies_cm_inv.size(); ++mode_index) {
-                const double frequency = vibration_data.frequencies_cm_inv[mode_index];
-                const bool is_imaginary = mode_index < vibration_data.is_imaginary.size() && vibration_data.is_imaginary[mode_index];
-                const QString value_text = is_imaginary
-                    ? QString("%1i cm^-1").arg(frequency, 0, 'f', 2)
-                    : QString("%1 cm^-1").arg(frequency, 0, 'f', 2);
-                auto* item = new QListWidgetItem(QString("Mode %1: %2")
-                                                     .arg(static_cast<int>(mode_index + 1))
-                                                     .arg(value_text));
-                if (is_imaginary) {
-                    QFont font = item->font();
-                    font.setBold(true);
-                    item->setFont(font);
+            if (frequency_list_ != nullptr) {
+                const QSignalBlocker blocker(frequency_list_);
+                frequency_list_->clear();
+                for (std::size_t mode_index = 0; mode_index < vibration_data.frequencies_cm_inv.size(); ++mode_index) {
+                    const double frequency = vibration_data.frequencies_cm_inv[mode_index];
+                    const bool is_imaginary = mode_index < vibration_data.is_imaginary.size() && vibration_data.is_imaginary[mode_index];
+                    const QString value_text = is_imaginary
+                        ? QString("%1i cm^-1").arg(frequency, 0, 'f', 2)
+                        : QString("%1 cm^-1").arg(frequency, 0, 'f', 2);
+                    auto* item = new QListWidgetItem(QString("Mode %1: %2")
+                                                         .arg(static_cast<int>(mode_index + 1))
+                                                         .arg(value_text));
+                    if (is_imaginary) {
+                        QFont font = item->font();
+                        font.setBold(true);
+                        item->setFont(font);
+                    }
+                    frequency_list_->addItem(item);
                 }
-                frequency_list_->addItem(item);
             }
-        }
 
-        if (frequency_list_ != nullptr && frequency_list_->count() > 0) {
-            int default_index = frequency_list_->count() - 1;
-            if (edge_selected) {
-                default_index = 0;
-                for (std::size_t i = 0; i < vibration_data.is_imaginary.size(); ++i) {
-                    if (vibration_data.is_imaginary[i]) {
-                        default_index = static_cast<int>(i);
-                        break;
+            if (frequency_list_ != nullptr && frequency_list_->count() > 0) {
+                int default_index = frequency_list_->count() - 1;
+                if (edge_selected) {
+                    default_index = 0;
+                    for (std::size_t i = 0; i < vibration_data.is_imaginary.size(); ++i) {
+                        if (vibration_data.is_imaginary[i]) {
+                            default_index = static_cast<int>(i);
+                            break;
+                        }
                     }
                 }
+                frequency_list_->setCurrentRow(default_index);
+                selected_structure_widget_->set_active_vibration_mode(default_index);
+            } else {
+                selected_structure_widget_->set_active_vibration_mode(-1);
             }
-            frequency_list_->setCurrentRow(default_index);
-            selected_structure_widget_->set_active_vibration_mode(default_index);
-        } else {
-            selected_structure_widget_->set_active_vibration_mode(-1);
+        } catch (const std::exception& ex) {
+            qWarning() << "Failed to refresh cached structure vibrations:" << ex.what();
+            clear_preview();
         }
 
         request_network_view_refresh();

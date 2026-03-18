@@ -168,29 +168,37 @@ bool NetworkView::has_node_selection() const { return selected_node_ >= 0; }
 
 bool NetworkView::has_edge_selection() const { return selected_edge_ >= 0; }
 
+bool NetworkView::has_valid_node_selection() const {
+    return has_node_selection() && selected_node_ < static_cast<int>(network_data_.nodes.size());
+}
+
+bool NetworkView::has_valid_edge_selection() const {
+    return has_edge_selection() && selected_edge_ < static_cast<int>(network_data_.edges.size());
+}
+
 QString NetworkView::selected_node_name() const {
-    if (!has_node_selection() || selected_node_ >= static_cast<int>(network_data_.nodes.size())) {
+    if (!has_valid_node_selection()) {
         return QString();
     }
     return network_data_.nodes[selected_node_].name;
 }
 
 QString NetworkView::selected_node_structure() const {
-    if (!has_node_selection() || selected_node_ >= static_cast<int>(network_data_.nodes.size())) {
+    if (!has_valid_node_selection()) {
         return QString();
     }
     return network_data_.nodes[selected_node_].structure;
 }
 
 QString NetworkView::selected_edge_structure() const {
-    if (!has_edge_selection() || selected_edge_ >= static_cast<int>(network_data_.edges.size())) {
+    if (!has_valid_edge_selection()) {
         return QString();
     }
     return network_data_.edges[selected_edge_].structure;
 }
 
 void NetworkView::set_selected_node_name(const QString& name) {
-    if (!has_node_selection() || selected_node_ >= static_cast<int>(network_data_.nodes.size())) {
+    if (!has_valid_node_selection()) {
         return;
     }
     network_data_.nodes[selected_node_].name = name;
@@ -199,7 +207,7 @@ void NetworkView::set_selected_node_name(const QString& name) {
 }
 
 void NetworkView::reset_selected_node_name() {
-    if (!has_node_selection() || selected_node_ >= static_cast<int>(network_data_.nodes.size())) {
+    if (!has_valid_node_selection()) {
         return;
     }
     NodeData& node = network_data_.nodes[selected_node_];
@@ -208,23 +216,45 @@ void NetworkView::reset_selected_node_name() {
     update();
 }
 
+void NetworkView::set_selected_node_label_angle_degrees(float degrees) {
+    if (!has_valid_node_selection()) {
+        return;
+    }
+    network_data_.nodes[selected_node_].label_angle_degrees = degrees;
+    update();
+}
+
+float NetworkView::selected_node_label_angle_degrees() const {
+    if (!has_valid_node_selection()) {
+        return label_angle_degrees_;
+    }
+    return network_data_.nodes[selected_node_].label_angle_degrees;
+}
+
+void NetworkView::set_all_node_label_angles(float degrees) {
+    for (NodeData& node : network_data_.nodes) {
+        node.label_angle_degrees = degrees;
+    }
+    update();
+}
+
 
 QString NetworkView::selected_item_type() const {
-    if (has_node_selection()) {
+    if (has_valid_node_selection()) {
         return "Node";
     }
-    if (has_edge_selection()) {
+    if (has_valid_edge_selection()) {
         return "Edge";
     }
     return QString();
 }
 
 QString NetworkView::selected_item_label() const {
-    if (has_node_selection() && selected_node_ < static_cast<int>(network_data_.nodes.size())) {
+    if (has_valid_node_selection()) {
         const NodeData& node = network_data_.nodes[selected_node_];
         return node.name.isEmpty() ? node.label : node.name;
     }
-    if (has_edge_selection() && selected_edge_ < static_cast<int>(network_data_.edges.size())) {
+    if (has_valid_edge_selection()) {
         const EdgeData& edge = network_data_.edges[selected_edge_];
         if (edge.from_index >= 0 && edge.to_index >= 0 &&
             edge.from_index < static_cast<int>(network_data_.nodes.size()) &&
@@ -236,18 +266,18 @@ QString NetworkView::selected_item_label() const {
 }
 
 QColor NetworkView::selected_item_color() const {
-    if (has_edge_selection() && selected_edge_ < static_cast<int>(network_data_.edges.size())) {
+    if (has_valid_edge_selection()) {
         const QString& color = network_data_.edges[selected_edge_].color;
         return color.isEmpty() ? line_color_ : QColor(color);
     }
-    if (has_node_selection() && selected_node_ < static_cast<int>(network_data_.nodes.size())) {
+    if (has_valid_node_selection()) {
         return selected_node_outline_color();
     }
     return QColor();
 }
 
 QColor NetworkView::selected_node_fill_color() const {
-    if (!has_node_selection() || selected_node_ >= static_cast<int>(network_data_.nodes.size())) {
+    if (!has_valid_node_selection()) {
         return QColor();
     }
     const QString& color = network_data_.nodes[selected_node_].fill_color;
@@ -255,7 +285,7 @@ QColor NetworkView::selected_node_fill_color() const {
 }
 
 QColor NetworkView::selected_node_outline_color() const {
-    if (!has_node_selection() || selected_node_ >= static_cast<int>(network_data_.nodes.size())) {
+    if (!has_valid_node_selection()) {
         return QColor();
     }
     const QString& color = network_data_.nodes[selected_node_].outline_color;
@@ -263,7 +293,7 @@ QColor NetworkView::selected_node_outline_color() const {
 }
 
 void NetworkView::set_selected_item_color(const QColor& color) {
-    if (!has_edge_selection() || selected_edge_ >= static_cast<int>(network_data_.edges.size())) {
+    if (!has_valid_edge_selection()) {
         return;
     }
     network_data_.edges[selected_edge_].color = color.name();
@@ -271,7 +301,7 @@ void NetworkView::set_selected_item_color(const QColor& color) {
 }
 
 void NetworkView::set_selected_node_fill_color(const QColor& color) {
-    if (!has_node_selection() || selected_node_ >= static_cast<int>(network_data_.nodes.size())) {
+    if (!has_valid_node_selection()) {
         return;
     }
     network_data_.nodes[selected_node_].fill_color = color.name();
@@ -279,7 +309,7 @@ void NetworkView::set_selected_node_fill_color(const QColor& color) {
 }
 
 void NetworkView::set_selected_node_outline_color(const QColor& color) {
-    if (!has_node_selection() || selected_node_ >= static_cast<int>(network_data_.nodes.size())) {
+    if (!has_valid_node_selection()) {
         return;
     }
     network_data_.nodes[selected_node_].outline_color = color.name();
@@ -287,14 +317,14 @@ void NetworkView::set_selected_node_outline_color(const QColor& color) {
 }
 
 bool NetworkView::selected_edge_swap_label_sides() const {
-    if (!has_edge_selection() || selected_edge_ >= static_cast<int>(network_data_.edges.size())) {
+    if (!has_valid_edge_selection()) {
         return false;
     }
     return network_data_.edges[selected_edge_].swap_label_sides;
 }
 
 void NetworkView::set_selected_edge_swap_label_sides(bool swap) {
-    if (!has_edge_selection() || selected_edge_ >= static_cast<int>(network_data_.edges.size())) {
+    if (!has_valid_edge_selection()) {
         return;
     }
     network_data_.edges[selected_edge_].swap_label_sides = swap;
@@ -773,14 +803,14 @@ void NetworkView::draw_scene(QPainter& painter, const QRectF& world_visible_rect
             painter.restore();
         }
 
-        const double angle_radians = label_angle_degrees_ * M_PI / 180.0;
+        const double angle_radians = node.label_angle_degrees * M_PI / 180.0;
         const QPointF direction(std::cos(angle_radians), -std::sin(angle_radians));
         const QPointF label_anchor = center + direction * (node_radius_ + node_label_distance_);
         const QString display_name = node.name.isEmpty() ? node.label : node.name;
 
         painter.save();
         painter.translate(label_anchor);
-        painter.rotate(-label_angle_degrees_);
+        painter.rotate(-node.label_angle_degrees);
         painter.setPen(QPen(label_color_));
         const QRectF text_rect(0.0f, -metrics.height() / 2.0f, 200.0f, metrics.height() + 4.0f);
         painter.drawText(text_rect, Qt::AlignLeft | Qt::AlignVCenter, display_name);
@@ -1064,7 +1094,7 @@ void NetworkView::mousePressEvent(QMouseEvent* event) {
         const QPointF world = to_world(event->pos());
         dragged_guide_node_ = -1;
         dragged_node_ = pick_node(world);
-        if (dragged_node_ >= 0) {
+        if (dragged_node_ >= 0 && dragged_node_ < static_cast<int>(network_data_.nodes.size())) {
             selected_node_ = dragged_node_;
             selected_edge_ = -1;
             const NodeData& node = network_data_.nodes[selected_node_];

@@ -31,6 +31,7 @@ struct NodeData {
     QString structure;
     QString fill_color;
     QString outline_color;
+    float label_angle_degrees{90.0f};
     float x{0.0f};
     float y{0.0f};
 };

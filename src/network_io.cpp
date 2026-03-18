@@ -329,6 +329,8 @@ bool load_network_yaml(const QString& path, NetworkData& out_data, QString& erro
         YAML::Node settings = root["settings"];
         const float node_radius = (settings && settings.IsMap() && settings["node_radius"]) ?
             settings["node_radius"].as<float>() : data.settings.node_radius;
+        const float default_label_angle = (settings && settings.IsMap() && settings["label_angle_degrees"]) ?
+            settings["label_angle_degrees"].as<float>() : data.settings.label_angle_degrees;
 
         for (size_t i = 0; i < node_list.size(); ++i) {
             const YAML::Node yaml_node = node_list[i];
@@ -351,6 +353,9 @@ bool load_network_yaml(const QString& path, NetworkData& out_data, QString& erro
             node.structure = scalar_to_qstring(map_child(yaml_node, "structure")).trimmed();
             node.fill_color = scalar_to_qstring(map_child(yaml_node, "fill_color")).trimmed();
             node.outline_color = scalar_to_qstring(map_child(yaml_node, "outline_color")).trimmed();
+            node.label_angle_degrees = map_child(yaml_node, "label_angle_degrees")
+                ? map_child(yaml_node, "label_angle_degrees").as<float>()
+                : default_label_angle;
 
             if (map_child(yaml_node, "position") && map_child(yaml_node, "position").IsMap() &&
                 map_child(map_child(yaml_node, "position"), "x") && map_child(map_child(yaml_node, "position"), "y")) {
@@ -494,6 +499,7 @@ bool network_yaml_to_string(const NetworkData& data, QString& yaml_text, QString
                 : node.outline_color.trimmed();
             node_yaml["fill_color"] = effective_fill_color.toStdString();
             node_yaml["outline_color"] = effective_outline_color.toStdString();
+            node_yaml["label_angle_degrees"] = node.label_angle_degrees;
             node_yaml["position"]["x"] = node.x;
             node_yaml["position"]["y"] = node.y;
             nodes.push_back(node_yaml);
