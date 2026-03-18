@@ -3,13 +3,13 @@
  *                                                                        *
  *   Author: Ivo Filot <ivo@ivofilot.nl>                                  *
  *                                                                        *
- *   MICROKINETIC NETWORK EDITOR is free software:                        *
+ *   MICROKINETIC NETWORK EDITOR (MNE) is free software:                  *
  *   you can redistribute it and/or modify it under the terms of the      *
  *   GNU General Public License as published by the Free Software         *
  *   Foundation, either version 3 of the License, or (at your option)     *
  *   any later version.                                                   *
  *                                                                        *
- *   MANAGLYPH is distributed in the hope that it will be useful,         *
+ *   MNE is distributed in the hope that it will be useful,               *
  *   but WITHOUT ANY WARRANTY; without even the implied warranty          *
  *   of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.              *
  *   See the GNU General Public License for more details.                 *
@@ -48,6 +48,15 @@ struct NamedColor {
     QColor color;
 };
 
+/**
+ * @brief Choose black or white text based on background luminance.
+ *
+ * The function computes perceived luminance with standard RGB weighting and returns black
+ * text for light backgrounds and white text for dark backgrounds.
+ *
+ * @param bg Background color behind text.
+ * @return Contrasting text color for readable labels.
+ */
 QColor idealTextColor(const QColor& bg) {
     const double luminance =
         0.299 * bg.redF() +
@@ -56,6 +65,15 @@ QColor idealTextColor(const QColor& bg) {
     return luminance > 0.5 ? Qt::black : Qt::white;
 }
 
+/**
+ * @brief Load themed swatch colors from the embedded Solarized YAML resource.
+ *
+ * The parser reads the resource file, validates the expected `themes` structure, and
+ * extracts only entries containing valid names and hexadecimal colors. Invalid nodes are
+ * skipped so malformed palette entries do not break the dialog.
+ *
+ * @return Flat list of named colors tagged with their theme name.
+ */
 std::vector<NamedColor> loadSolarizedSwatches() {
     std::vector<NamedColor> swatches;
 
@@ -65,32 +83,58 @@ std::vector<NamedColor> loadSolarizedSwatches() {
     }
 
     const QByteArray bytes = file.readAll();
-    YAML::Node root = YAML::Load(bytes.toStdString());
+    const YAML::Node root = YAML::Load(bytes.toStdString());
+
     const YAML::Node themes = root["themes"];
-    if (!themes || !themes.IsSequence()) {
-        return swatches;
-    }
-
-    for (std::size_t i = 0; i < themes.size(); ++i) {
-        const YAML::Node theme_node = themes[i];
-        if (!theme_node || !theme_node.IsMap() || !theme_node["name"] || !theme_node["colors"]) {
-            continue;
-        }
-
-        const QString theme_name = QString::fromStdString(theme_node["name"].as<std::string>());
-        const YAML::Node colors = theme_node["colors"];
-        if (!colors.IsSequence()) {
-            continue;
-        }
-
-        for (std::size_t j = 0; j < colors.size(); ++j) {
-            const YAML::Node color_node = colors[j];
-            if (!color_node || !color_node.IsMap() || !color_node["name"] || !color_node["hex"]) {
+    if (themes && themes.IsSequence()) {
+        for (std::size_t i = 0; i < themes.size(); ++i) {
+            const YAML::Node theme_node = themes[i];
+            if (!theme_node || !theme_node.IsMap() || !theme_node["name"] || !theme_node["colors"]) {
                 continue;
             }
 
-            const QString color_name = QString::fromStdString(color_node["name"].as<std::string>());
-            const QColor color(QString::fromStdString(color_node["hex"].as<std::string>()));
+            const QString theme_name = QString::fromStdString(theme_node["name"].as<std::string>());
+            const YAML::Node colors = theme_node["colors"];
+            if (!colors.IsSequence()) {
+                continue;
+            }
+
+            for (std::size_t j = 0; j < colors.size(); ++j) {
+                const YAML::Node color_node = colors[j];
+                if (!color_node || !color_node.IsMap() || !color_node["name"] || !color_node["hex"]) {
+                    continue;
+                }
+
+                const QString color_name = QString::fromStdString(color_node["name"].as<std::string>());
+                const QColor color(QString::fromStdString(color_node["hex"].as<std::string>()));
+                if (!color.isValid()) {
+                    continue;
+                }
+
+                swatches.push_back(NamedColor{theme_name, color_name, color});
+            }
+        }
+        return swatches;
+    }
+
+    if (!root || !root.IsMap()) {
+        return swatches;
+    }
+
+    for (YAML::const_iterator it = root.begin(); it != root.end(); ++it) {
+        if (!it->first.IsScalar() || !it->second.IsMap()) {
+            continue;
+        }
+
+        const QString theme_name = QString::fromStdString(it->first.as<std::string>());
+        const YAML::Node colors = it->second;
+        for (YAML::const_iterator color_it = colors.begin(); color_it != colors.end(); ++color_it) {
+            if (!color_it->first.IsScalar() || !color_it->second.IsScalar()) {
+                continue;
+            }
+
+            const QString color_name = QString::fromStdString(color_it->first.as<std::string>());
+            const QColor color(QString::fromStdString(color_it->second.as<std::string>()));
             if (!color.isValid()) {
                 continue;
             }
@@ -104,6 +148,15 @@ std::vector<NamedColor> loadSolarizedSwatches() {
 
 }  // namespace
 
+/**
+ * @brief Build the picker UI and initialize it from an input color.
+ *
+ * The constructor wires wheel, value slider, and hex input so each control reflects
+ * changes from the others, and it adds optional swatch buttons loaded from YAML.
+ *
+ * @param initial Starting color shown when the dialog opens.
+ * @param parent Optional parent widget for ownership and modality scoping.
+ */
 ColorPickerDialog::ColorPickerDialog(const QColor& initial, QWidget* parent)
     : QDialog(parent) {
     setWindowTitle(tr("Select color"));
@@ -198,10 +251,26 @@ ColorPickerDialog::ColorPickerDialog(const QColor& initial, QWidget* parent)
     adjustSize();
 }
 
+/**
+ * @brief Return the currently selected color from the wheel state.
+ *
+ * This accessor reflects the active HSV selection after user interaction or swatch
+ * selection, regardless of whether the dialog has been accepted yet.
+ *
+ * @return Currently selected color.
+ */
 QColor ColorPickerDialog::color() const {
     return wheel_->color();
 }
 
+/**
+ * @brief Refresh the hex preview label and editor text for a color.
+ *
+ * The method formats the color as uppercase `#RRGGBB`, updates both display widgets,
+ * and applies contrasting foreground text based on luminance for readability.
+ *
+ * @param c Color to display in hexadecimal form.
+ */
 void ColorPickerDialog::updateHexDisplay(const QColor& c) {
     const QString hex = c.name(QColor::HexRgb).toUpper();
     const QColor text = idealTextColor(c);
@@ -221,12 +290,28 @@ void ColorPickerDialog::updateHexDisplay(const QColor& c) {
                                .arg(c.name(), text.name()));
 }
 
+/**
+ * @brief Apply a color to all interactive picker controls.
+ *
+ * This updates the wheel state, synchronizes the value slider to brightness, and then
+ * refreshes the hex preview widgets so the whole dialog reflects the same color.
+ *
+ * @param c Color to propagate through the dialog controls.
+ */
 void ColorPickerDialog::applyColor(const QColor& c) {
     wheel_->setColor(c);
     valueSlider_->setValue(static_cast<int>(c.valueF() * 100.0));
     updateHexDisplay(c);
 }
 
+/**
+ * @brief Build the scrollable swatch panel from bundled palette data.
+ *
+ * The function creates grouped buttons per theme and connects each button to apply its
+ * color when clicked. If no layout is provided it exits without creating UI elements.
+ *
+ * @param container_layout Parent layout that receives the swatch group box.
+ */
 void ColorPickerDialog::buildSwatches(QVBoxLayout* container_layout) {
     if (container_layout == nullptr) {
         return;

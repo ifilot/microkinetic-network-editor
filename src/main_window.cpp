@@ -3,13 +3,13 @@
  *                                                                        *
  *   Author: Ivo Filot <ivo@ivofilot.nl>                                  *
  *                                                                        *
- *   MICROKINETIC NETWORK EDITOR is free software:                        *
+ *   MICROKINETIC NETWORK EDITOR (MNE) is free software:                  *
  *   you can redistribute it and/or modify it under the terms of the      *
  *   GNU General Public License as published by the Free Software         *
  *   Foundation, either version 3 of the License, or (at your option)     *
  *   any later version.                                                   *
  *                                                                        *
- *   MANAGLYPH is distributed in the hope that it will be useful,         *
+ *   MNE is distributed in the hope that it will be useful,               *
  *   but WITHOUT ANY WARRANTY; without even the implied warranty          *
  *   of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.              *
  *   See the GNU General Public License for more details.                 *
@@ -22,9 +22,12 @@
 #include "main_window.h"
 
 #include <QAction>
+#include <QCoreApplication>
 #include <QAbstractItemView>
 #include <QDockWidget>
+#include <QDir>
 #include <QDialog>
+#include <QDialogButtonBox>
 #include <QSpinBox>
 #include <QComboBox>
 #include <QDoubleSpinBox>
@@ -41,37 +44,54 @@
 #include <QMenu>
 #include <QMenuBar>
 #include <QMessageBox>
+#include <QPlainTextEdit>
 #include <QPushButton>
 #include <QSettings>
 #include <QSignalBlocker>
 #include <QStatusBar>
 #include <QTableWidget>
 #include <QHeaderView>
+#include <QTimer>
+#include <QHash>
 #include <QVBoxLayout>
 #include <QWidget>
 
 #include <algorithm>
+#include <cmath>
+#include <exception>
+#include <numeric>
+#include <utility>
+
 
 #include "color_picker_dialog.h"
 #include "config.h"
 #include "log_window.h"
 #include "logging.h"
 #include "network_io.h"
+#include "structures/anaglyph_widget.h"
+#include "structures/structure_loader.h"
+#include "vibrational_analysis.h"
+
+namespace {
+QHash<QString, std::shared_ptr<Structure>> g_loaded_structure_cache;
+} // namespace
 
 MainWindow::MainWindow(QWidget* parent)
     : QMainWindow(parent) {
-    setWindowTitle(QString("%1 %2").arg(kProgramName, kProgramVersion));
+    update_window_title();
     setWindowIcon(QIcon(QStringLiteral(":/icons/mng-icon.png")));
     resize(1200, 760);
 
     view_ = new NetworkView(this);
+    view_->setMinimumWidth(220);
     setCentralWidget(view_);
     connect(view_, &NetworkView::selection_changed, this, &MainWindow::on_selection_changed);
 
     QSettings settings;
     last_directory_path_ = settings.value("io/last_directory", QString()).toString();
+    recent_files_ = settings.value("io/recent_files").toStringList();
 
-    build_settings_widget();
+    build_properties_widget();
     build_menus();
 
     log_window_ = new LogWindow(g_log_messages, this);
@@ -85,23 +105,42 @@ void MainWindow::build_menus() {
     load_action->setShortcut(QKeySequence::Open);
     connect(load_action, &QAction::triggered, this, &MainWindow::load_yaml);
 
-    QAction* save_action = file_menu->addAction("&Save YAML...");
+    QAction* save_action = file_menu->addAction("&Save YAML");
     save_action->setShortcut(QKeySequence::Save);
     connect(save_action, &QAction::triggered, this, &MainWindow::save_yaml);
+
+    QAction* save_as_action = file_menu->addAction("Save YAML &As...");
+    save_as_action->setShortcut(QKeySequence::SaveAs);
+    connect(save_as_action, &QAction::triggered, this, &MainWindow::save_yaml_as);
 
     QAction* save_png_action = file_menu->addAction("Save &PNG...");
     save_png_action->setShortcut(QKeySequence("Ctrl+Shift+S"));
     connect(save_png_action, &QAction::triggered, this, &MainWindow::save_png);
+
+    recent_menu_ = file_menu->addMenu("&Recent");
+    connect(recent_menu_, &QMenu::aboutToShow, this, &MainWindow::rebuild_recent_menu);
+    rebuild_recent_menu();
+
+    examples_menu_ = file_menu->addMenu("&Examples");
+    connect(examples_menu_, &QMenu::aboutToShow, this, &MainWindow::rebuild_examples_menu);
+    rebuild_examples_menu();
 
     file_menu->addSeparator();
     QAction* exit_action = file_menu->addAction("E&xit");
     exit_action->setShortcut(QKeySequence::Quit);
     connect(exit_action, &QAction::triggered, this, &QWidget::close);
 
-    QMenu* settings_menu = menuBar()->addMenu("&Settings");
-    if (settings_toggle_action_ != nullptr) {
-        settings_menu->addAction(settings_toggle_action_);
+    QMenu* properties_menu = menuBar()->addMenu("&Properties");
+    if (properties_toggle_action_ != nullptr) {
+        properties_menu->addAction(properties_toggle_action_);
     }
+    if (yaml_source_toggle_action_ != nullptr) {
+        properties_menu->addAction(yaml_source_toggle_action_);
+    }
+
+    QMenu* adjust_menu = menuBar()->addMenu("&Adjust");
+    QAction* adjust_nodes_action = adjust_menu->addAction("&Nodes...");
+    connect(adjust_nodes_action, &QAction::triggered, this, &MainWindow::adjust_all_node_label_angles);
 
     QMenu* help_menu = menuBar()->addMenu("&Help");
     debug_log_action_ = help_menu->addAction("Show &Debug Log");
@@ -111,71 +150,65 @@ void MainWindow::build_menus() {
     connect(about_action, &QAction::triggered, this, &MainWindow::show_about);
 }
 
-void MainWindow::build_settings_widget() {
-    QDockWidget* settings_dock = new QDockWidget("Settings", this);
-    settings_dock->setObjectName("settings-dock");
+void MainWindow::build_properties_widget() {
+    QDockWidget* properties_dock = new QDockWidget("Properties", this);
+    properties_dock->setObjectName("properties-dock");
 
-    QWidget* settings_widget = new QWidget(settings_dock);
-    QVBoxLayout* layout = new QVBoxLayout(settings_widget);
+    QWidget* properties_widget = new QWidget(properties_dock);
+    QVBoxLayout* layout = new QVBoxLayout(properties_widget);
 
-    auto* geometry_group = new QGroupBox("Geometry", settings_widget);
+    auto* geometry_group = new QGroupBox("Geometry", properties_widget);
     auto* geometry_form = new QFormLayout(geometry_group);
-    node_radius_spin_ = new QDoubleSpinBox(settings_widget);
+    node_radius_spin_ = new QDoubleSpinBox(properties_widget);
     node_radius_spin_->setRange(6.0, 120.0);
     geometry_form->addRow("Node size", node_radius_spin_);
     connect(node_radius_spin_, qOverload<double>(&QDoubleSpinBox::valueChanged), this, &MainWindow::update_node_size);
 
-    line_thickness_spin_ = new QDoubleSpinBox(settings_widget);
+    line_thickness_spin_ = new QDoubleSpinBox(properties_widget);
     line_thickness_spin_->setRange(1.0, 30.0);
     line_thickness_spin_->setSingleStep(0.5);
     geometry_form->addRow("Line thickness", line_thickness_spin_);
     connect(line_thickness_spin_, qOverload<double>(&QDoubleSpinBox::valueChanged), this, &MainWindow::update_line_thickness);
 
-    node_outline_spin_ = new QDoubleSpinBox(settings_widget);
+    node_outline_spin_ = new QDoubleSpinBox(properties_widget);
     node_outline_spin_->setRange(0.5, 12.0);
     node_outline_spin_->setSingleStep(0.25);
     geometry_form->addRow("Node outline thickness", node_outline_spin_);
     connect(node_outline_spin_, qOverload<double>(&QDoubleSpinBox::valueChanged), this, &MainWindow::update_node_outline_thickness);
 
-    auto* typography_group = new QGroupBox("Typography", settings_widget);
+    auto* typography_group = new QGroupBox("Typography", properties_widget);
     auto* typography_form = new QFormLayout(typography_group);
-    font_family_combo_ = new QFontComboBox(settings_widget);
+    font_family_combo_ = new QFontComboBox(properties_widget);
     typography_form->addRow("Font", font_family_combo_);
     connect(font_family_combo_, &QFontComboBox::currentFontChanged, this, &MainWindow::update_font_family);
 
-    font_size_spin_ = new QDoubleSpinBox(settings_widget);
+    font_size_spin_ = new QDoubleSpinBox(properties_widget);
     font_size_spin_->setRange(6.0, 64.0);
     typography_form->addRow("Font size", font_size_spin_);
     connect(font_size_spin_, qOverload<double>(&QDoubleSpinBox::valueChanged), this, &MainWindow::update_font_size);
 
-    label_angle_spin_ = new QDoubleSpinBox(settings_widget);
-    label_angle_spin_->setRange(-180.0, 180.0);
-    label_angle_spin_->setSingleStep(5.0);
-    typography_form->addRow("Node label angle", label_angle_spin_);
-    connect(label_angle_spin_, qOverload<double>(&QDoubleSpinBox::valueChanged), this, &MainWindow::update_label_angle);
-
-    label_distance_spin_ = new QDoubleSpinBox(settings_widget);
+    label_distance_spin_ = new QDoubleSpinBox(properties_widget);
     label_distance_spin_->setRange(0.0, 100.0);
     label_distance_spin_->setSingleStep(1.0);
     typography_form->addRow("Node label distance", label_distance_spin_);
     connect(label_distance_spin_, qOverload<double>(&QDoubleSpinBox::valueChanged), this, &MainWindow::update_node_label_distance);
 
-    value_decimals_spin_ = new QSpinBox(settings_widget);
+    value_decimals_spin_ = new QSpinBox(properties_widget);
     value_decimals_spin_->setRange(0, 10);
     typography_form->addRow("Value decimals", value_decimals_spin_);
     connect(value_decimals_spin_, qOverload<int>(&QSpinBox::valueChanged), this, &MainWindow::update_value_decimals);
 
-    value_unit_combo_ = new QComboBox(settings_widget);
+    value_unit_combo_ = new QComboBox(properties_widget);
     value_unit_combo_->addItem("eV");
     value_unit_combo_->addItem("kJ/mol");
     typography_form->addRow("Value unit", value_unit_combo_);
     connect(value_unit_combo_, &QComboBox::currentTextChanged, this, &MainWindow::update_value_unit);
 
-    auto* colors_group = new QGroupBox("Colors", settings_widget);
+    auto* colors_group = new QGroupBox("Colors", properties_widget);
     auto* colors_form = new QFormLayout(colors_group);
 
-    auto add_color_row = [this, settings_widget, colors_form](const QString& label, QPushButton*& button, QLabel*& hex, const char* slot) {
-        auto* row = new QWidget(settings_widget);
+    auto add_color_row = [this, properties_widget, colors_form](const QString& label, QPushButton*& button, QLabel*& hex, const char* slot) {
+        auto* row = new QWidget(properties_widget);
         auto* row_layout = new QHBoxLayout(row);
         row_layout->setContentsMargins(0, 0, 0, 0);
         hex = new QLabel("#000000", row);
@@ -191,27 +224,34 @@ void MainWindow::build_settings_widget() {
     add_color_row("Background", bg_color_button_, bg_color_hex_, SLOT(pick_background_color()));
     add_color_row("Label color", label_color_button_, label_color_hex_, SLOT(pick_label_color()));
 
-    auto* selection_group = new QGroupBox("Selection", settings_widget);
+    auto* selection_group = new QGroupBox("Selection", properties_widget);
     selection_form_ = new QFormLayout(selection_group);
 
-    selected_type_value_ = new QLabel("None", settings_widget);
+    selected_type_value_ = new QLabel("None", properties_widget);
     selection_form_->addRow("Selected", selected_type_value_);
 
-    selected_node_edit_ = new QLineEdit(settings_widget);
-    selected_node_name_row_ = new QWidget(settings_widget);
+    selected_node_edit_ = new QLineEdit(properties_widget);
+    selected_node_name_row_ = new QWidget(properties_widget);
     {
         auto* row_layout = new QHBoxLayout(selected_node_name_row_);
         row_layout->setContentsMargins(0, 0, 0, 0);
         row_layout->addWidget(selected_node_edit_);
-        reset_node_name_button_ = new QPushButton("Revert to label", settings_widget);
+        reset_node_name_button_ = new QPushButton("Revert to label", properties_widget);
         row_layout->addWidget(reset_node_name_button_);
     }
     selection_form_->addRow("Node name", selected_node_name_row_);
     connect(selected_node_edit_, &QLineEdit::textEdited, this, &MainWindow::update_selected_node_name);
     connect(reset_node_name_button_, &QPushButton::clicked, this, &MainWindow::reset_selected_node_name);
 
-    auto add_selection_color_row = [this, settings_widget](const QString& label, QPushButton*& button, QLabel*& hex_label, QWidget*& row_widget, const char* slot) {
-        row_widget = new QWidget(settings_widget);
+    label_angle_spin_ = new QDoubleSpinBox(properties_widget);
+    label_angle_spin_->setRange(-180.0, 180.0);
+    label_angle_spin_->setSingleStep(5.0);
+    selected_node_label_angle_row_ = label_angle_spin_;
+    selection_form_->addRow("Node label angle", label_angle_spin_);
+    connect(label_angle_spin_, qOverload<double>(&QDoubleSpinBox::valueChanged), this, &MainWindow::update_selected_node_label_angle);
+
+    auto add_selection_color_row = [this, properties_widget](const QString& label, QPushButton*& button, QLabel*& hex_label, QWidget*& row_widget, const char* slot) {
+        row_widget = new QWidget(properties_widget);
         auto* row_layout = new QHBoxLayout(row_widget);
         row_layout->setContentsMargins(0, 0, 0, 0);
         hex_label = new QLabel("#000000", row_widget);
@@ -228,18 +268,18 @@ void MainWindow::build_settings_widget() {
     add_selection_color_row("Node fill", selection_node_fill_color_button_, selection_node_fill_color_hex_, selected_node_fill_row_, SLOT(pick_selection_node_fill_color()));
     add_selection_color_row("Node outline", selection_node_outline_color_button_, selection_node_outline_color_hex_, selected_node_outline_row_, SLOT(pick_selection_node_outline_color()));
 
-    edge_swap_labels_row_ = new QWidget(settings_widget);
+    edge_swap_labels_row_ = new QWidget(properties_widget);
     {
         auto* row_layout = new QHBoxLayout(edge_swap_labels_row_);
         row_layout->setContentsMargins(0, 0, 0, 0);
-        swap_edge_labels_button_ = new QPushButton("Swap edge label sides", settings_widget);
+        swap_edge_labels_button_ = new QPushButton("Swap edge label sides", properties_widget);
         swap_edge_labels_button_->setCheckable(true);
         row_layout->addWidget(swap_edge_labels_button_);
     }
     selection_form_->addRow("", edge_swap_labels_row_);
     connect(swap_edge_labels_button_, &QPushButton::toggled, this, &MainWindow::toggle_selected_edge_swap_labels);
 
-    edge_segments_table_ = new QTableWidget(settings_widget);
+    edge_segments_table_ = new QTableWidget(properties_widget);
     edge_segments_table_->setColumnCount(2);
     edge_segments_table_->setHorizontalHeaderLabels(QStringList{"Segment", "Shape"});
     edge_segments_table_->horizontalHeader()->setStretchLastSection(true);
@@ -253,18 +293,18 @@ void MainWindow::build_settings_widget() {
     selection_form_->addRow("Segments", edge_segments_table_);
     connect(edge_segments_table_, &QTableWidget::currentCellChanged, this, &MainWindow::on_edge_segment_selected);
 
-    edge_label_segment_combo_ = new QComboBox(settings_widget);
+    edge_label_segment_combo_ = new QComboBox(properties_widget);
     edge_label_segment_row_ = edge_label_segment_combo_;
     selection_form_->addRow("Label segment", edge_label_segment_combo_);
     connect(edge_label_segment_combo_, qOverload<int>(&QComboBox::currentIndexChanged), this, &MainWindow::on_edge_label_segment_changed);
 
-    add_guide_node_button_ = new QPushButton("Add guide node", settings_widget);
+    add_guide_node_button_ = new QPushButton("Add guide node", properties_widget);
     add_guide_node_button_->setEnabled(false);
     add_guide_node_row_ = add_guide_node_button_;
     selection_form_->addRow("", add_guide_node_button_);
     connect(add_guide_node_button_, &QPushButton::clicked, this, &MainWindow::add_selected_edge_guide_node);
 
-    remove_guide_node_button_ = new QPushButton("Remove guide node", settings_widget);
+    remove_guide_node_button_ = new QPushButton("Remove guide node", properties_widget);
     remove_guide_node_button_->setEnabled(false);
     remove_guide_node_row_ = remove_guide_node_button_;
     selection_form_->addRow("", remove_guide_node_button_);
@@ -275,7 +315,7 @@ void MainWindow::build_settings_widget() {
     layout->addWidget(colors_group);
     layout->addWidget(selection_group);
 
-    auto* design_errors_row = new QWidget(settings_widget);
+    auto* design_errors_row = new QWidget(properties_widget);
     auto* design_errors_layout = new QHBoxLayout(design_errors_row);
     design_errors_layout->setContentsMargins(0, 0, 0, 0);
     design_errors_label_ = new QLabel("0 errors in design found.", design_errors_row);
@@ -288,14 +328,52 @@ void MainWindow::build_settings_widget() {
 
     layout->addStretch();
 
-    settings_widget->setLayout(layout);
-    settings_dock->setWidget(settings_widget);
-    addDockWidget(Qt::RightDockWidgetArea, settings_dock);
+    properties_widget->setLayout(layout);
+    properties_dock->setWidget(properties_widget);
+    addDockWidget(Qt::RightDockWidgetArea, properties_dock);
 
-    settings_toggle_action_ = settings_dock->toggleViewAction();
-    settings_toggle_action_->setText("Show &Settings");
+    properties_toggle_action_ = properties_dock->toggleViewAction();
+    properties_toggle_action_->setText("Show &Properties");
+
+    structure_dock_ = new QDockWidget("Structures", this);
+    structure_dock_->setObjectName("structures-dock");
+    selected_structure_row_ = new QWidget(structure_dock_);
+    {
+        auto* structure_layout = new QVBoxLayout(selected_structure_row_);
+        frequency_list_ = new QListWidget(selected_structure_row_);
+        frequency_list_->setSelectionMode(QAbstractItemView::SingleSelection);
+        frequency_list_->setMinimumHeight(140);
+        structure_layout->addWidget(frequency_list_);
+        connect(frequency_list_, &QListWidget::currentRowChanged, this, &MainWindow::on_frequency_selected);
+
+        selected_structure_widget_ = new AnaglyphWidget(selected_structure_row_);
+        selected_structure_widget_->setMinimumHeight(260);
+        structure_layout->addWidget(selected_structure_widget_);
+
+        xy_expansion_toggle_button_ = new QPushButton("Show XY Expansion", selected_structure_row_);
+        structure_layout->addWidget(xy_expansion_toggle_button_);
+        connect(xy_expansion_toggle_button_, &QPushButton::clicked, this, &MainWindow::toggle_xy_structure_expansion);
+    }
+    structure_dock_->setWidget(selected_structure_row_);
+    addDockWidget(Qt::LeftDockWidgetArea, structure_dock_);
+
+    properties_dock->setMinimumWidth(320);
+    structure_dock_->setMinimumWidth(320);
+    resizeDocks({structure_dock_, properties_dock}, {320, 320}, Qt::Horizontal);
+
+    auto* yaml_source_dock = new QDockWidget("YAML Source", this);
+    yaml_source_dock->setObjectName("yaml-source-dock");
+    yaml_source_view_ = new QPlainTextEdit(yaml_source_dock);
+    yaml_source_view_->setReadOnly(true);
+    yaml_source_view_->setLineWrapMode(QPlainTextEdit::NoWrap);
+    yaml_source_dock->setWidget(yaml_source_view_);
+    addDockWidget(Qt::RightDockWidgetArea, yaml_source_dock);
+    yaml_source_toggle_action_ = yaml_source_dock->toggleViewAction();
+    yaml_source_toggle_action_->setText("Show &YAML Source");
+    yaml_source_dock->hide();
 
     sync_controls_from_view();
+    refresh_yaml_source_widget();
 }
 
 void MainWindow::load_yaml() {
@@ -309,6 +387,10 @@ void MainWindow::load_yaml() {
         return;
     }
 
+    load_yaml_from_path(file_path, true);
+}
+
+bool MainWindow::load_yaml_from_path(const QString& file_path, bool remember_recent) {
     NetworkData data;
     QString error;
     if (!load_network_yaml(file_path, data, error)) {
@@ -322,7 +404,7 @@ void MainWindow::load_yaml() {
         } else {
             QMessageBox::critical(this, "Load failed", "Failed to load YAML:\n" + error);
         }
-        return;
+        return false;
     }
 
     view_->set_network(data);
@@ -331,12 +413,178 @@ void MainWindow::load_yaml() {
     }
     sync_controls_from_view();
 
-    current_file_path_ = file_path;
-    remember_dialog_path(file_path);
-    statusBar()->showMessage("Loaded: " + file_path, 4000);
+    const QString absolute_file_path = QFileInfo(file_path).absoluteFilePath();
+    current_file_path_ = absolute_file_path;
+    loaded_network_directory_ = QFileInfo(absolute_file_path).absolutePath();
+    remember_dialog_path(absolute_file_path);
+    if (remember_recent) {
+        remember_recent_file(absolute_file_path);
+    }
+    statusBar()->showMessage("Loaded: " + absolute_file_path, 4000);
+    update_window_title();
+    refresh_yaml_source_widget();
+    return true;
+}
+
+void MainWindow::remember_recent_file(const QString& file_path) {
+    const QString normalized = QFileInfo(file_path).absoluteFilePath();
+    recent_files_.removeAll(normalized);
+    recent_files_.prepend(normalized);
+    while (recent_files_.size() > 10) {
+        recent_files_.removeLast();
+    }
+
+    QSettings settings;
+    settings.setValue("io/recent_files", recent_files_);
+    rebuild_recent_menu();
+}
+
+void MainWindow::rebuild_recent_menu() {
+    if (recent_menu_ == nullptr) {
+        return;
+    }
+
+    recent_menu_->clear();
+
+    bool has_existing_files = false;
+    for (const QString& file_path : std::as_const(recent_files_)) {
+        if (!QFileInfo::exists(file_path)) {
+            continue;
+        }
+        has_existing_files = true;
+        const QString label = QString("%1  %2").arg(recent_menu_->actions().size() + 1).arg(QFileInfo(file_path).fileName());
+        QAction* action = recent_menu_->addAction(label);
+        action->setToolTip(file_path);
+        action->setData(file_path);
+        connect(action, &QAction::triggered, this, &MainWindow::open_recent_file);
+    }
+
+    if (!has_existing_files) {
+        QAction* empty_action = recent_menu_->addAction("No recent files");
+        empty_action->setEnabled(false);
+        return;
+    }
+
+    recent_menu_->addSeparator();
+    QAction* clear_action = recent_menu_->addAction("Clear history");
+    connect(clear_action, &QAction::triggered, this, &MainWindow::clear_recent_history);
+}
+
+void MainWindow::rebuild_examples_menu() {
+    if (examples_menu_ == nullptr) {
+        return;
+    }
+
+    examples_menu_->clear();
+    const QString examples_dir_path = find_examples_directory();
+    if (examples_dir_path.isEmpty()) {
+        QAction* missing_action = examples_menu_->addAction("Examples directory not found");
+        missing_action->setEnabled(false);
+        return;
+    }
+
+    QDir examples_dir(examples_dir_path);
+    const QFileInfoList yaml_files = examples_dir.entryInfoList({"*.yaml", "*.yml"}, QDir::Files | QDir::Readable, QDir::Name);
+    if (yaml_files.isEmpty()) {
+        QAction* empty_action = examples_menu_->addAction("No YAML examples found");
+        empty_action->setEnabled(false);
+        return;
+    }
+
+    for (const QFileInfo& yaml_file : yaml_files) {
+        QAction* action = examples_menu_->addAction(yaml_file.fileName());
+        action->setToolTip(yaml_file.absoluteFilePath());
+        action->setData(yaml_file.absoluteFilePath());
+        connect(action, &QAction::triggered, this, &MainWindow::open_example_file);
+    }
+}
+
+QString MainWindow::find_examples_directory() const {
+    const QDir app_dir(QCoreApplication::applicationDirPath());
+    const QStringList candidates = {
+        app_dir.absoluteFilePath("examples"),
+        app_dir.absoluteFilePath("../examples"),
+        QDir::current().absoluteFilePath("examples"),
+        QDir::current().absoluteFilePath("../examples")
+    };
+
+    for (const QString& candidate : candidates) {
+        QFileInfo info(candidate);
+        if (info.exists() && info.isDir()) {
+            return info.absoluteFilePath();
+        }
+    }
+
+    return QString();
+}
+
+void MainWindow::open_recent_file() {
+    QAction* action = qobject_cast<QAction*>(sender());
+    if (action == nullptr) {
+        return;
+    }
+
+    const QString file_path = action->data().toString();
+    if (file_path.isEmpty()) {
+        return;
+    }
+
+    if (!QFileInfo::exists(file_path)) {
+        QMessageBox::warning(this, "Missing file", "The selected file no longer exists:\n" + file_path);
+        recent_files_.removeAll(file_path);
+        QSettings settings;
+        settings.setValue("io/recent_files", recent_files_);
+        rebuild_recent_menu();
+        return;
+    }
+
+    load_yaml_from_path(file_path, true);
+}
+
+void MainWindow::open_example_file() {
+    QAction* action = qobject_cast<QAction*>(sender());
+    if (action == nullptr) {
+        return;
+    }
+
+    const QString file_path = action->data().toString();
+    if (file_path.isEmpty()) {
+        return;
+    }
+
+    load_yaml_from_path(file_path, true);
+}
+
+void MainWindow::clear_recent_history() {
+    recent_files_.clear();
+    QSettings settings;
+    settings.setValue("io/recent_files", recent_files_);
+    rebuild_recent_menu();
 }
 
 void MainWindow::save_yaml() {
+    if (current_file_path_.isEmpty()) {
+        save_yaml_as();
+        return;
+    }
+
+    QString error;
+    NetworkData data = view_->network();
+    data.settings = view_->current_settings();
+    data.has_settings = true;
+    if (!save_network_yaml(current_file_path_, data, error)) {
+        QMessageBox::critical(this, "Save failed", "Failed to save YAML:\n" + error);
+        return;
+    }
+
+    loaded_network_directory_ = QFileInfo(current_file_path_).absolutePath();
+    remember_dialog_path(current_file_path_);
+    statusBar()->showMessage("Saved: " + current_file_path_, 4000);
+    update_window_title();
+    refresh_yaml_source_widget();
+}
+
+void MainWindow::save_yaml_as() {
     QString starting_path = current_file_path_;
     if (starting_path.isEmpty()) {
         const QString base_dir = initial_dialog_directory();
@@ -362,11 +610,15 @@ void MainWindow::save_yaml() {
     }
 
     current_file_path_ = file_path;
+    loaded_network_directory_ = QFileInfo(file_path).absolutePath();
     remember_dialog_path(file_path);
     statusBar()->showMessage("Saved: " + file_path, 4000);
+    update_window_title();
+    refresh_yaml_source_widget();
 }
 
 void MainWindow::save_png() {
+
     const QString file_path = QFileDialog::getSaveFileName(this,
                                                            "Save PNG",
                                                            initial_dialog_directory().isEmpty() ? "network.png" : initial_dialog_directory() + "/network.png",
@@ -385,23 +637,32 @@ void MainWindow::save_png() {
 }
 
 void MainWindow::show_about() {
+    const QString license_html = QString::fromUtf8(kLicenseText).toHtmlEscaped().replace("\n", "<br>");
+
     QMessageBox::about(this,
                        QString("About %1").arg(kProgramName),
-                       QString("%1\nVersion %2\n\n"
-                               "Author: Ivo Filot <i.a.w.filot@tue.nl>\n"
-                               "Maintainer: Ivo Filot <i.a.w.filot@tue.nl>\n\n"
-                               "Acknowledgements:\n"
-                               "- María Presa Zubillaga\n"
-                               "- Bart Zijlstra\n"
-                               "- Min Zhang\n"
-                               "- Robin Broos\n"
-                               "- Xianxuan Ren\n\n"
-                               "License:\n%3\n\n"
-                               "Third-party dependencies:\n"
+                       QString("<h3>%1</h3>"
+                               "<p>Version %2</p>"
+                               "<p>Author: Ivo Filot &lt;<a href='mailto:i.a.w.filot@tue.nl'>i.a.w.filot@tue.nl</a>&gt;<br>"
+                               "Maintainer: Ivo Filot &lt;<a href='mailto:i.a.w.filot@tue.nl'>i.a.w.filot@tue.nl</a>&gt;</p>"
+                               "<p><b>Acknowledgements:</b><br>"
+                               "- María Presa Zubillaga<br>"
+                               "- Bart Zijlstra<br>"
+                               "- Min Zhang<br>"
+                               "- Robin Broos<br>"
+                               "- Xianxuan Ren<br>"
+                               "- Joeri van Limpt</p>"
+                               "<p><b>License:</b><br>%3</p>"
+                               "<p><b>Third-party dependencies:</b><br>"
                                "- Qt (Qt Widgets / QOpenGLWidget). Qt is available under LGPLv3/GPL/commercial terms; "
-                               "redistribution must comply with the selected Qt license terms.\n"
-                               "- yaml-cpp (YAML parser library).")
-                           .arg(kProgramName, kProgramVersion, kLicenseText));
+                               "redistribution must comply with the selected Qt license terms. "
+                               "Source code: <a href='https://code.qt.io/cgit/qt/'>https://code.qt.io/cgit/qt/</a><br>"
+                               "- yaml-cpp (YAML parser library). "
+                               "Source code: <a href='https://github.com/jbeder/yaml-cpp'>https://github.com/jbeder/yaml-cpp</a></p>"
+                               "<p><b>Project repository:</b> "
+                               "<a href='https://github.com/ifilot/microkinetic-network-editor'>"
+                               "https://github.com/ifilot/microkinetic-network-editor</a></p>")
+                           .arg(kProgramName, kProgramVersion, license_html));
 }
 
 void MainWindow::show_debug_log() {
@@ -414,31 +675,78 @@ void MainWindow::show_debug_log() {
     log_window_->activateWindow();
 }
 
-void MainWindow::update_node_size(double value) { view_->set_node_radius(static_cast<float>(value)); }
+void MainWindow::adjust_all_node_label_angles() {
+    QDialog dialog(this);
+    dialog.setWindowTitle("Adjust node label angles");
+    auto* layout = new QVBoxLayout(&dialog);
 
-void MainWindow::update_line_thickness(double value) { view_->set_line_thickness(static_cast<float>(value)); }
+    auto* form_layout = new QFormLayout();
+    auto* angle_spin = new QDoubleSpinBox(&dialog);
+    angle_spin->setRange(-180.0, 180.0);
+    angle_spin->setSingleStep(5.0);
+    angle_spin->setValue(view_->label_angle_degrees());
+    form_layout->addRow("Angle (degrees)", angle_spin);
+    layout->addLayout(form_layout);
+
+    auto* button_box = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
+    layout->addWidget(button_box);
+    connect(button_box, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
+    connect(button_box, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+
+    if (dialog.exec() != QDialog::Accepted) {
+        return;
+    }
+
+    QMessageBox confirmation(this);
+    confirmation.setIcon(QMessageBox::Warning);
+    confirmation.setWindowTitle("Overwrite all node angles?");
+    confirmation.setText("This will overwrite the label-angle setting for all nodes.");
+    confirmation.setInformativeText("Are you sure you want to continue?");
+    confirmation.setStandardButtons(QMessageBox::Yes | QMessageBox::Cancel);
+    confirmation.setDefaultButton(QMessageBox::Cancel);
+    if (confirmation.exec() != QMessageBox::Yes) {
+        return;
+    }
+
+    view_->set_all_node_label_angles(static_cast<float>(angle_spin->value()));
+    on_selection_changed();
+    refresh_yaml_source_widget();
+}
+
+void MainWindow::update_node_size(double value) { view_->set_node_radius(static_cast<float>(value)); refresh_yaml_source_widget(); }
+
+void MainWindow::update_line_thickness(double value) { view_->set_line_thickness(static_cast<float>(value)); refresh_yaml_source_widget(); }
 
 void MainWindow::update_node_outline_thickness(double value) {
     view_->set_node_outline_thickness(static_cast<float>(value));
+    refresh_yaml_source_widget();
 }
 
-void MainWindow::update_font_size(double value) { view_->set_font_size(static_cast<float>(value)); }
+void MainWindow::update_font_size(double value) { view_->set_font_size(static_cast<float>(value)); refresh_yaml_source_widget(); }
 
-void MainWindow::update_label_angle(double value) { view_->set_label_angle_degrees(static_cast<float>(value)); }
+void MainWindow::update_label_angle(double value) { view_->set_label_angle_degrees(static_cast<float>(value)); refresh_yaml_source_widget(); }
 
-void MainWindow::update_font_family(const QFont& font) { view_->set_font_family(font.family()); }
+void MainWindow::update_selected_node_label_angle(double value) {
+    if (!view_->has_node_selection()) {
+        return;
+    }
+    view_->set_selected_node_label_angle_degrees(static_cast<float>(value));
+    refresh_yaml_source_widget();
+}
 
-void MainWindow::update_node_label_distance(double value) { view_->set_node_label_distance(static_cast<float>(value)); }
+void MainWindow::update_font_family(const QFont& font) { view_->set_font_family(font.family()); refresh_yaml_source_widget(); }
 
-void MainWindow::update_value_decimals(int value) { view_->set_value_decimals(value); }
+void MainWindow::update_node_label_distance(double value) { view_->set_node_label_distance(static_cast<float>(value)); refresh_yaml_source_widget(); }
 
-void MainWindow::update_value_unit(const QString& unit) { view_->set_value_unit(unit); }
+void MainWindow::update_value_decimals(int value) { view_->set_value_decimals(value); refresh_yaml_source_widget(); }
 
-void MainWindow::update_selected_node_name(const QString& label) { view_->set_selected_node_name(label); }
+void MainWindow::update_value_unit(const QString& unit) { view_->set_value_unit(unit); refresh_yaml_source_widget(); }
 
-void MainWindow::reset_selected_node_name() { view_->reset_selected_node_name(); }
+void MainWindow::update_selected_node_name(const QString& label) { view_->set_selected_node_name(label); refresh_yaml_source_widget(); }
 
-void MainWindow::toggle_selected_edge_swap_labels(bool checked) { view_->set_selected_edge_swap_label_sides(checked); }
+void MainWindow::reset_selected_node_name() { view_->reset_selected_node_name(); refresh_yaml_source_widget(); }
+
+void MainWindow::toggle_selected_edge_swap_labels(bool checked) { view_->set_selected_edge_swap_label_sides(checked); refresh_yaml_source_widget(); }
 
 void MainWindow::on_edge_segment_selected(int current_row, int, int, int) {
     Q_UNUSED(current_row);
@@ -451,11 +759,12 @@ void MainWindow::on_edge_label_segment_changed(int index) {
         return;
     }
     view_->set_selected_edge_label_segment_index(index);
+    refresh_yaml_source_widget();
 }
 
-void MainWindow::add_selected_edge_guide_node() { view_->add_selected_edge_guide_node(); }
+void MainWindow::add_selected_edge_guide_node() { view_->add_selected_edge_guide_node(); refresh_yaml_source_widget(); }
 
-void MainWindow::remove_selected_edge_guide_node() { view_->remove_selected_edge_guide_node(); }
+void MainWindow::remove_selected_edge_guide_node() { view_->remove_selected_edge_guide_node(); refresh_yaml_source_widget(); }
 
 void MainWindow::refresh_edge_segments_table() {
     const bool edge_selected = view_->has_edge_selection();
@@ -481,6 +790,7 @@ void MainWindow::refresh_edge_segments_table() {
                 return;
             }
             view_->set_selected_edge_segment_kind_at(row, static_cast<NetworkView::SegmentKindUi>(index));
+            refresh_yaml_source_widget();
         });
         edge_segments_table_->setCellWidget(row, 1, shape_combo);
     }
@@ -519,6 +829,15 @@ void MainWindow::on_selection_changed() {
 
     selected_node_name_row_->setVisible(node_selected);
     if (QWidget* label = selection_form_->labelForField(selected_node_name_row_)) {
+        label->setVisible(node_selected);
+    }
+    {
+        const QSignalBlocker blocker(label_angle_spin_);
+        label_angle_spin_->setValue(node_selected ? view_->selected_node_label_angle_degrees() : view_->label_angle_degrees());
+    }
+    label_angle_spin_->setEnabled(node_selected);
+    selected_node_label_angle_row_->setVisible(node_selected);
+    if (QWidget* label = selection_form_->labelForField(selected_node_label_angle_row_)) {
         label->setVisible(node_selected);
     }
 
@@ -573,10 +892,218 @@ void MainWindow::on_selection_changed() {
     }
 
     refresh_edge_segments_table();
+    request_structure_preview_refresh();
 
     add_guide_node_button_->setEnabled(edge_selected && view_->selected_edge_can_add_guide_node());
     remove_guide_node_button_->setEnabled(edge_selected && view_->selected_edge_can_remove_guide_node());
     refresh_design_errors_summary();
+    refresh_yaml_source_widget();
+    request_network_view_refresh();
+
+}
+
+void MainWindow::request_network_view_refresh() {
+    if (network_view_refresh_pending_) {
+        return;
+    }
+
+    network_view_refresh_pending_ = true;
+    QTimer::singleShot(0, this, [this]() {
+        network_view_refresh_pending_ = false;
+        if (view_ != nullptr) {
+            view_->update();
+        }
+    });
+}
+
+void MainWindow::request_structure_preview_refresh() {
+    if (structure_preview_refresh_pending_) {
+        return;
+    }
+
+    structure_preview_refresh_pending_ = true;
+    QTimer::singleShot(0, this, [this]() {
+        structure_preview_refresh_pending_ = false;
+        refresh_selected_structure_preview();
+    });
+}
+
+void MainWindow::refresh_selected_structure_preview() {
+    if (view_ == nullptr || selected_structure_widget_ == nullptr || selected_structure_row_ == nullptr) {
+        return;
+    }
+
+    const bool node_selected = view_->has_node_selection();
+    const bool edge_selected = view_->has_edge_selection();
+    const QString structure_path = node_selected ? view_->selected_node_structure().trimmed()
+                                               : (edge_selected ? view_->selected_edge_structure().trimmed() : QString());
+    const bool has_structure = !structure_path.isEmpty();
+
+    auto clear_preview = [this]() {
+        selected_structure_widget_->set_structure(nullptr);
+        selected_structure_widget_->set_vibration_modes({}, {});
+        if (frequency_list_ != nullptr) {
+            frequency_list_->clear();
+        }
+        last_loaded_structure_path_.clear();
+    };
+
+    if (!has_structure) {
+        clear_preview();
+        request_network_view_refresh();
+        return;
+    }
+
+    QString resolved_path = structure_path;
+    if (QDir::isRelativePath(structure_path)) {
+        resolved_path = QDir(loaded_network_directory_).filePath(structure_path);
+    }
+    resolved_path = QFileInfo(resolved_path).canonicalFilePath().isEmpty() ? QFileInfo(resolved_path).absoluteFilePath()
+                                                                          : QFileInfo(resolved_path).canonicalFilePath();
+
+    if (!QFileInfo::exists(resolved_path)) {
+        qWarning() << "Structure file does not exist:" << resolved_path;
+        if (!last_loaded_structure_path_.isEmpty()) {
+            clear_preview();
+        }
+        request_network_view_refresh();
+        return;
+    }
+
+    if (resolved_path == last_loaded_structure_path_ && selected_structure_widget_->get_structure() != nullptr) {
+        try {
+            const auto existing_structure = selected_structure_widget_->get_structure();
+            const auto vibration_data = vibration_modes_from_partial_hessian(resolved_path, existing_structure->get_nr_atoms());
+            selected_structure_widget_->set_vibration_modes(vibration_data.modes, vibration_data.frequencies_cm_inv);
+
+            if (frequency_list_ != nullptr) {
+                const QSignalBlocker blocker(frequency_list_);
+                frequency_list_->clear();
+                for (std::size_t mode_index = 0; mode_index < vibration_data.frequencies_cm_inv.size(); ++mode_index) {
+                    const double frequency = vibration_data.frequencies_cm_inv[mode_index];
+                    const bool is_imaginary = mode_index < vibration_data.is_imaginary.size() && vibration_data.is_imaginary[mode_index];
+                    const QString value_text = is_imaginary
+                        ? QString("%1i cm^-1").arg(frequency, 0, 'f', 2)
+                        : QString("%1 cm^-1").arg(frequency, 0, 'f', 2);
+                    auto* item = new QListWidgetItem(QString("Mode %1: %2")
+                                                         .arg(static_cast<int>(mode_index + 1))
+                                                         .arg(value_text));
+                    if (is_imaginary) {
+                        QFont font = item->font();
+                        font.setBold(true);
+                        item->setFont(font);
+                    }
+                    frequency_list_->addItem(item);
+                }
+            }
+
+            if (frequency_list_ != nullptr && frequency_list_->count() > 0) {
+                int default_index = frequency_list_->count() - 1;
+                if (edge_selected) {
+                    default_index = 0;
+                    for (std::size_t i = 0; i < vibration_data.is_imaginary.size(); ++i) {
+                        if (vibration_data.is_imaginary[i]) {
+                            default_index = static_cast<int>(i);
+                            break;
+                        }
+                    }
+                }
+                frequency_list_->setCurrentRow(default_index);
+                selected_structure_widget_->set_active_vibration_mode(default_index);
+            } else {
+                selected_structure_widget_->set_active_vibration_mode(-1);
+            }
+        } catch (const std::exception& ex) {
+            qWarning() << "Failed to refresh cached structure vibrations:" << ex.what();
+            clear_preview();
+        }
+
+        request_network_view_refresh();
+        return;
+    }
+
+    try {
+        if (!g_loaded_structure_cache.contains(resolved_path)) {
+            StructureLoader loader;
+            const auto structures = loader.load_file(resolved_path);
+            if (structures.empty()) {
+                throw std::runtime_error("No structures loaded from file.");
+            }
+            g_loaded_structure_cache.insert(resolved_path, structures.back());
+        }
+
+        const auto loaded_structure = g_loaded_structure_cache.value(resolved_path);
+        if (loaded_structure == nullptr) {
+            throw std::runtime_error("Loaded structure is null.");
+        }
+
+        selected_structure_widget_->set_structure(loaded_structure);
+
+        const auto vibration_data = vibration_modes_from_partial_hessian(resolved_path, loaded_structure->get_nr_atoms());
+        selected_structure_widget_->set_vibration_modes(vibration_data.modes, vibration_data.frequencies_cm_inv);
+
+        if (frequency_list_ != nullptr) {
+            const QSignalBlocker blocker(frequency_list_);
+            frequency_list_->clear();
+            for (std::size_t mode_index = 0; mode_index < vibration_data.frequencies_cm_inv.size(); ++mode_index) {
+                const double frequency = vibration_data.frequencies_cm_inv[mode_index];
+                const bool is_imaginary = mode_index < vibration_data.is_imaginary.size() && vibration_data.is_imaginary[mode_index];
+                const QString value_text = is_imaginary
+                    ? QString("%1i cm^-1").arg(frequency, 0, 'f', 2)
+                    : QString("%1 cm^-1").arg(frequency, 0, 'f', 2);
+                auto* item = new QListWidgetItem(QString("Mode %1: %2")
+                                                     .arg(static_cast<int>(mode_index + 1))
+                                                     .arg(value_text));
+                if (is_imaginary) {
+                    QFont font = item->font();
+                    font.setBold(true);
+                    item->setFont(font);
+                }
+                frequency_list_->addItem(item);
+            }
+        }
+
+        if (frequency_list_ != nullptr && frequency_list_->count() > 0) {
+            int default_index = frequency_list_->count() - 1;
+            if (edge_selected) {
+                default_index = 0;
+                for (std::size_t i = 0; i < vibration_data.is_imaginary.size(); ++i) {
+                    if (vibration_data.is_imaginary[i]) {
+                        default_index = static_cast<int>(i);
+                        break;
+                    }
+                }
+            }
+            frequency_list_->setCurrentRow(default_index);
+            selected_structure_widget_->set_active_vibration_mode(default_index);
+        } else {
+            selected_structure_widget_->set_active_vibration_mode(-1);
+        }
+
+        last_loaded_structure_path_ = resolved_path;
+    } catch (const std::exception& ex) {
+        qWarning() << "Failed to load structure for selected item:" << ex.what();
+        clear_preview();
+    }
+
+    request_network_view_refresh();
+}
+
+void MainWindow::on_frequency_selected(int current_row) {
+    if (selected_structure_widget_ == nullptr) {
+        return;
+    }
+    selected_structure_widget_->set_active_vibration_mode(current_row);
+}
+
+void MainWindow::toggle_xy_structure_expansion() {
+    if (selected_structure_widget_ == nullptr || xy_expansion_toggle_button_ == nullptr) {
+        return;
+    }
+
+    const bool show_xy_expansion = !selected_structure_widget_->get_show_xy_expansion();
+    selected_structure_widget_->set_show_xy_expansion(show_xy_expansion);
+    xy_expansion_toggle_button_->setText(show_xy_expansion ? "Hide XY Expansion" : "Show XY Expansion");
 }
 
 void MainWindow::refresh_design_errors_summary() {
@@ -619,6 +1146,7 @@ void MainWindow::pick_background_color() {
 
     view_->set_background_color(dialog.color());
     set_color_chip(bg_color_button_, bg_color_hex_, dialog.color());
+    refresh_yaml_source_widget();
 }
 
 void MainWindow::pick_edge_color() {
@@ -632,6 +1160,7 @@ void MainWindow::pick_edge_color() {
 
     view_->set_selected_item_color(dialog.color());
     on_selection_changed();
+    refresh_yaml_source_widget();
 }
 
 void MainWindow::pick_selection_node_fill_color() {
@@ -645,6 +1174,7 @@ void MainWindow::pick_selection_node_fill_color() {
 
     view_->set_selected_node_fill_color(dialog.color());
     on_selection_changed();
+    refresh_yaml_source_widget();
 }
 
 void MainWindow::pick_selection_node_outline_color() {
@@ -658,6 +1188,7 @@ void MainWindow::pick_selection_node_outline_color() {
 
     view_->set_selected_node_outline_color(dialog.color());
     on_selection_changed();
+    refresh_yaml_source_widget();
 }
 
 void MainWindow::pick_label_color() {
@@ -668,6 +1199,36 @@ void MainWindow::pick_label_color() {
 
     view_->set_label_color(dialog.color());
     set_color_chip(label_color_button_, label_color_hex_, dialog.color());
+    refresh_yaml_source_widget();
+}
+
+void MainWindow::update_window_title() {
+    const QString base_title = QString("%1 %2").arg(kProgramName, kProgramVersion);
+    if (current_file_path_.isEmpty()) {
+        setWindowTitle(base_title);
+        return;
+    }
+
+    setWindowTitle(QString("%1 - %2").arg(QFileInfo(current_file_path_).fileName(), base_title));
+}
+
+void MainWindow::refresh_yaml_source_widget() {
+    if (yaml_source_view_ == nullptr || view_ == nullptr) {
+        return;
+    }
+
+    NetworkData data = view_->network();
+    data.settings = view_->current_settings();
+    data.has_settings = true;
+
+    QString yaml_text;
+    QString error;
+    if (!network_yaml_to_string(data, yaml_text, error)) {
+        yaml_source_view_->setPlainText(QString("# Failed to generate YAML source:\n%1").arg(error));
+        return;
+    }
+
+    yaml_source_view_->setPlainText(yaml_text);
 }
 
 QString MainWindow::initial_dialog_directory() const {
@@ -714,4 +1275,5 @@ void MainWindow::sync_controls_from_view() {
     set_color_chip(bg_color_button_, bg_color_hex_, view_->background_color());
     set_color_chip(label_color_button_, label_color_hex_, view_->label_color());
     on_selection_changed();
+    update_window_title();
 }

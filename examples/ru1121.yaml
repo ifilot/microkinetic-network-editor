@@ -1,102 +1,236 @@
-pymkmkit:
-  version: 0.1.0
-  units: eV
-  energy_type: elec+zpe
 nodes:
-- label: empty
-  structure: ru1121_structures/empty.yaml
-- label: CO*
-  structure: ru1121_structures/co__1.yaml
-- label: C*
-  structure: ru1121_structures/c.yaml
-- label: O*
-  structure: ru1121_structures/o.yaml
-- label: CH*
-  structure: ru1121_structures/ch.yaml
-- label: CH2*
-  structure: ru1121_structures/ch2.yaml
-- label: CH3*
-  structure: ru1121_structures/ch3.yaml
-- label: H*
-  structure: ru1121_structures/h.yaml
-- label: OH*
-  structure: ru1121_structures/oh.yaml
-- label: H2O*
-  structure: ru1121_structures/h2o__1.yaml
-- label: CH4
-  structure: ru1121_structures/ch4.yaml
-- label: CO
-  structure: ru1121_structures/co__2.yaml
-- label: H2
-  structure: ru1121_structures/h2.yaml
-- label: H2O
-  structure: ru1121_structures/h2o__2.yaml
+  - label: CO*
+    structure: ru1121_structures/co__1.yaml
+    fill_color: "#ffffff"
+    outline_color: "#000000"
+    position:
+      x: 100
+      y: 100
+  - label: C*
+    structure: ru1121_structures/c.yaml
+    fill_color: "#ffffff"
+    outline_color: "#000000"
+    position:
+      x: 200
+      y: 100
+  - label: O*
+    structure: ru1121_structures/o.yaml
+    fill_color: "#ffffff"
+    outline_color: "#000000"
+    position:
+      x: 200
+      y: 300
+  - label: CH*
+    structure: ru1121_structures/ch.yaml
+    fill_color: "#ffffff"
+    outline_color: "#000000"
+    position:
+      x: 300
+      y: 100
+  - label: CH2*
+    structure: ru1121_structures/ch2.yaml
+    fill_color: "#ffffff"
+    outline_color: "#000000"
+    position:
+      x: 400
+      y: 100
+  - label: CH3*
+    structure: ru1121_structures/ch3.yaml
+    fill_color: "#ffffff"
+    outline_color: "#000000"
+    position:
+      x: 500
+      y: 100
+  - label: OH*
+    structure: ru1121_structures/oh.yaml
+    fill_color: "#ffffff"
+    outline_color: "#000000"
+    position:
+      x: 300
+      y: 300
+  - label: H2O*
+    structure: ru1121_structures/h2o__1.yaml
+    fill_color: "#ffffff"
+    outline_color: "#000000"
+    position:
+      x: 400
+      y: 300
+  - label: CH4
+    structure: ru1121_structures/ch4.yaml
+    fill_color: "#ffffff"
+    outline_color: "#000000"
+    position:
+      x: 600
+      y: 100
+  - label: CO
+    structure: ru1121_structures/co__2.yaml
+    fill_color: "#ffffff"
+    outline_color: "#000000"
+    position:
+      x: 0
+      y: 100
+  - label: H2O
+    structure: ru1121_structures/h2o__2.yaml
+    fill_color: "#ffffff"
+    outline_color: "#000000"
+    position:
+      x: 500
+      y: 300
 edges:
-- name: CO dissociation
-  type: surf
-  nodes:
-  - CO*
-  - C*
-  forward: 0.7080028430897156
-  backward: 0.7438501929936465
-- name: CO dissociation
-  type: surf
-  nodes:
-  - CO*
-  - O*
-  forward: 0.7080028430897156
-  backward: 0.7438501929936465
-- name: C hydrogenation
-  type: surf
-  nodes:
-  - C*
-  - CH*
-  forward: 0.40675383911190255
-  backward: 0.26738162752002786
-- name: CH hydrogenation
-  type: surf
-  nodes:
-  - CH*
-  - CH2*
-  forward: 0.7037797578729998
-  backward: 0.3623659245363919
-- name: CH2 hydrogenation
-  type: surf
-  nodes:
-  - CH2*
-  - CH3*
-  forward: 0.6724791559985482
-  backward: 0.6575613554771652
-- name: CH3 hydrogenation
-  type: surf
-  nodes:
-  - CH3*
-  - CH4
-  forward: 1.1984658527715288
-  backward: 0.46699863573038325
-- name: O hydrogenation
-  type: surf
-  nodes:
-  - O*
-  - OH*
-  forward: 0.9253489072050349
-  backward: 0.607454457202829
-- name: OH hydrogenation
-  type: surf
-  nodes:
-  - OH*
-  - H2O*
-  forward: 1.1028015704059453
-  backward: 0.44687573117954515
-- name: CO adsorption
-  type: ads
-  nodes:
-  - CO
-  - CO*
-  ads: -1.6380418417986062
-- name: H2O adsorption
-  type: ads
-  nodes:
-  - H2O
-  - H2O*
-  ads: -0.6432017863050621
+  - nodes:
+      - CO*
+      - C*
+    type: surf
+    name: CO dissociation
+    structure: ru1121_structures/co_diss.yaml
+    color: "#dc322f"
+    values:
+      - 0.7080028430897156
+      - 0.7438501929936465
+    swap_label_sides: false
+    label_segment: 0
+    segment_types:
+      - straight
+  - nodes:
+      - CO*
+      - O*
+    type: surf
+    name: CO dissociation
+    structure: ru1121_structures/co_diss.yaml
+    color: "#dc322f"
+    values:
+      - 0.7080028430897156
+      - 0.7438501929936465
+    swap_label_sides: false
+    label_segment: 1
+    guide_nodes:
+      - x: 200
+        y: 200
+    segment_types:
+      - wiggle_vertical_first
+      - straight
+  - nodes:
+      - C*
+      - CH*
+    type: surf
+    name: C hydrogenation
+    structure: ru1121_structures/c_hydr.yaml
+    color: "#dc322f"
+    values:
+      - 0.40675383911190255
+      - 0.26738162752002786
+    swap_label_sides: false
+    label_segment: 0
+    segment_types:
+      - straight
+  - nodes:
+      - CH*
+      - CH2*
+    type: surf
+    name: CH hydrogenation
+    structure: ru1121_structures/ch_hydr.yaml
+    color: "#dc322f"
+    values:
+      - 0.7037797578729997
+      - 0.3623659245363918
+    swap_label_sides: false
+    label_segment: 0
+    segment_types:
+      - straight
+  - nodes:
+      - CH2*
+      - CH3*
+    type: surf
+    name: CH2 hydrogenation
+    structure: ru1121_structures/ch2_hydr.yaml
+    color: "#dc322f"
+    values:
+      - 0.6724791559985484
+      - 0.6575613554771653
+    swap_label_sides: false
+    label_segment: 0
+    segment_types:
+      - straight
+  - nodes:
+      - CH3*
+      - CH4
+    type: surf
+    name: CH3 hydrogenation
+    structure: ru1121_structures/ch3_hydr.yaml
+    color: "#dc322f"
+    values:
+      - 1.1984658527715288
+      - 0.466998635730383
+    swap_label_sides: false
+    label_segment: 0
+    segment_types:
+      - straight
+  - nodes:
+      - O*
+      - OH*
+    type: surf
+    name: O hydrogenation
+    structure: ru1121_structures/o_hydr.yaml
+    color: "#dc322f"
+    values:
+      - 0.9253489072050349
+      - 0.6074544572028291
+    swap_label_sides: false
+    label_segment: 0
+    segment_types:
+      - straight
+  - nodes:
+      - OH*
+      - H2O*
+    type: surf
+    name: OH hydrogenation
+    structure: ru1121_structures/oh_hydr.yaml
+    color: "#dc322f"
+    values:
+      - 1.1028015704059455
+      - 0.44687573117954515
+    swap_label_sides: false
+    label_segment: 0
+    segment_types:
+      - straight
+  - nodes:
+      - CO
+      - CO*
+    type: ads
+    name: CO adsorption
+    color: "#dc322f"
+    values:
+      - 0
+      - 1.638041841798606
+    swap_label_sides: false
+    label_segment: 0
+    segment_types:
+      - straight
+  - nodes:
+      - H2O
+      - H2O*
+    type: ads
+    name: H2O adsorption
+    color: "#dc322f"
+    values:
+      - 0
+      - 0.6432017863050622
+    swap_label_sides: false
+    label_segment: 0
+    segment_types:
+      - straight
+settings:
+  node_radius: 10
+  line_thickness: 5
+  node_outline_thickness: 3
+  font_size: 12
+  label_angle_degrees: 55
+  node_label_distance: 9
+  font_family: Bahnschrift SemiBold
+  background_color: "#fdf6e3"
+  node_fill_color: "#ffffff"
+  node_outline_color: "#000000"
+  line_color: "#dc322f"
+  label_color: "#000000"
+  value_decimals: 1
+  value_unit: kJ/mol

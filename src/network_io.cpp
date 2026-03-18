@@ -3,13 +3,13 @@
  *                                                                        *
  *   Author: Ivo Filot <ivo@ivofilot.nl>                                  *
  *                                                                        *
- *   MICROKINETIC NETWORK EDITOR is free software:                        *
+ *   MICROKINETIC NETWORK EDITOR (MNE) is free software:                  *
  *   you can redistribute it and/or modify it under the terms of the      *
  *   GNU General Public License as published by the Free Software         *
  *   Foundation, either version 3 of the License, or (at your option)     *
  *   any later version.                                                   *
  *                                                                        *
- *   MANAGLYPH is distributed in the hope that it will be useful,         *
+ *   MNE is distributed in the hope that it will be useful,               *
  *   but WITHOUT ANY WARRANTY; without even the implied warranty          *
  *   of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.              *
  *   See the GNU General Public License for more details.                 *
@@ -39,6 +39,18 @@ namespace {
 constexpr float kGridSpacing = 140.0f;
 constexpr int kGridColumns = 4;
 
+/**
+ * @brief Test whether a candidate position is too close to any already placed node.
+ *
+ * The function computes squared Euclidean distances against each node and compares them
+ * with the provided minimum threshold, avoiding square-root work during repeated checks.
+ *
+ * @param x Candidate x-coordinate for a node center.
+ * @param y Candidate y-coordinate for a node center.
+ * @param nodes Nodes that are already considered placed.
+ * @param minimum_distance_squared Squared minimum allowed center-to-center distance.
+ * @return True when the candidate overlaps an existing node distance constraint.
+ */
 bool overlaps_existing_node(float x, float y, const std::vector<NodeData>& nodes, float minimum_distance_squared) {
     for (const NodeData& node : nodes) {
         const float dx = x - node.x;
@@ -51,6 +63,17 @@ bool overlaps_existing_node(float x, float y, const std::vector<NodeData>& nodes
     return false;
 }
 
+/**
+ * @brief Assign grid-based fallback positions to nodes missing explicit coordinates.
+ *
+ * Pre-positioned nodes are copied first, then unpositioned nodes are placed on a fixed
+ * column grid while skipping slots that violate a radius-derived spacing threshold. This
+ * mutates `data.nodes` in place so all nodes have usable coordinates after loading.
+ *
+ * @param data Network data whose node coordinates are completed in place.
+ * @param has_position Flags indicating which node entries already had coordinates in YAML.
+ * @param node_radius Radius used to derive a minimum spacing between generated positions.
+ */
 void assign_default_positions(NetworkData& data, const std::vector<bool>& has_position, float node_radius) {
     std::vector<NodeData> placed_nodes;
     placed_nodes.reserve(data.nodes.size());
@@ -89,6 +112,17 @@ void assign_default_positions(NetworkData& data, const std::vector<bool>& has_po
     }
 }
 
+/**
+ * @brief Read a color-like scalar field from a YAML map with fallback behavior.
+ *
+ * If the key exists it is converted to a QString; otherwise the provided fallback is
+ * returned unchanged.
+ *
+ * @param node YAML map node to inspect.
+ * @param key Key name to retrieve.
+ * @param fallback Value returned when the key is absent.
+ * @return Parsed string value or fallback.
+ */
 QString color_or_default(const YAML::Node& node, const char* key, const QString& fallback) {
     if (node[key]) {
         return QString::fromStdString(node[key].as<std::string>());
@@ -96,6 +130,16 @@ QString color_or_default(const YAML::Node& node, const char* key, const QString&
     return fallback;
 }
 
+/**
+ * @brief Fetch a child entry from a YAML map only when the parent is a valid map node.
+ *
+ * This helper guards key access by returning an empty node for null or non-map parents,
+ * allowing callers to chain optional lookups safely.
+ *
+ * @param node Parent YAML node expected to be a map.
+ * @param key Child key to retrieve.
+ * @return Requested child node or an empty node when unavailable.
+ */
 YAML::Node map_child(const YAML::Node& node, const char* key) {
     if (!node || !node.IsMap()) {
         return YAML::Node();
@@ -103,6 +147,15 @@ YAML::Node map_child(const YAML::Node& node, const char* key) {
     return node[key];
 }
 
+/**
+ * @brief Convert a scalar YAML node to QString with a tolerant fallback path.
+ *
+ * The function returns an empty string for non-scalars, first attempts typed conversion to
+ * `std::string`, and falls back to raw scalar text if conversion throws.
+ *
+ * @param node YAML node expected to hold scalar text.
+ * @return Converted QString, or empty when the node is missing/non-scalar.
+ */
 QString scalar_to_qstring(const YAML::Node& node) {
     if (!node || !node.IsScalar()) {
         return QString();
@@ -115,6 +168,16 @@ QString scalar_to_qstring(const YAML::Node& node) {
     }
 }
 
+/**
+ * @brief Flatten scalar or nested-sequence YAML values into a QString list.
+ *
+ * Sequences are traversed recursively and scalar entries are appended when non-empty after
+ * conversion. This lets edge value fields accept either single values or arbitrarily nested
+ * arrays in input YAML.
+ *
+ * @param value YAML node containing scalar or sequence values.
+ * @param out_values Destination list that receives parsed scalar strings.
+ */
 void append_value_node(const YAML::Node& value, std::vector<QString>& out_values) {
     if (!value) {
         return;
@@ -134,6 +197,15 @@ void append_value_node(const YAML::Node& value, std::vector<QString>& out_values
 }
 
 
+/**
+ * @brief Map an edge segment kind enum to its YAML string token.
+ *
+ * The mapping keeps serialization stable for bend/wiggle variants and defaults unknown
+ * values to `straight`.
+ *
+ * @param kind Segment routing mode to encode.
+ * @return Canonical YAML token for the segment kind.
+ */
 QString segment_kind_to_string(EdgeData::SegmentKind kind) {
     switch (kind) {
     case EdgeData::SegmentKind::BendClockwise:
@@ -150,6 +222,15 @@ QString segment_kind_to_string(EdgeData::SegmentKind kind) {
     }
 }
 
+/**
+ * @brief Parse a YAML segment type token into the internal segment-kind enum.
+ *
+ * Input text is trimmed and lowercased, supports legacy aliases for clockwise and
+ * counterclockwise bends, and falls back to straight segments for unknown values.
+ *
+ * @param kind_raw Raw segment token read from YAML.
+ * @return Parsed segment kind, or Straight when unrecognized.
+ */
 EdgeData::SegmentKind segment_kind_from_string(const QString& kind_raw) {
     const QString kind = kind_raw.trimmed().toLower();
     if (kind == "bend_cw" || kind == "clockwise") {
@@ -167,6 +248,15 @@ EdgeData::SegmentKind segment_kind_from_string(const QString& kind_raw) {
     return EdgeData::SegmentKind::Straight;
 }
 
+/**
+ * @brief Expand a scalar adsorption energy into forward/backward edge values.
+ *
+ * For adsorption-style edges, this helper appends a zero forward barrier and the negative
+ * adsorption energy as the backward value to match the editor's expected two-value format.
+ *
+ * @param ads_node YAML scalar containing an adsorption energy value.
+ * @param out_values Destination list receiving generated forward/backward entries.
+ */
 void append_forward_backward_from_ads(const YAML::Node& ads_node, std::vector<QString>& out_values) {
     if (!ads_node || !ads_node.IsScalar()) {
         return;
@@ -179,6 +269,18 @@ void append_forward_backward_from_ads(const YAML::Node& ads_node, std::vector<QS
 
 }  // namespace
 
+/**
+ * @brief Parse a network YAML file and populate node, edge, and view-setting data.
+ *
+ * The loader validates required fields, resolves edge labels to node indices, normalizes
+ * optional edge/value encodings, and assigns fallback node coordinates when positions are
+ * missing. Parsing and validation errors are returned through `error` and a false result.
+ *
+ * @param path Path to the YAML file to read from disk.
+ * @param out_data Destination structure that receives parsed network content on success.
+ * @param error Output string receiving a human-readable error when loading fails.
+ * @return True when parsing and conversion succeed; false otherwise.
+ */
 bool load_network_yaml(const QString& path, NetworkData& out_data, QString& error) {
     qInfo() << "Loading network YAML from" << path;
     try {
@@ -227,6 +329,8 @@ bool load_network_yaml(const QString& path, NetworkData& out_data, QString& erro
         YAML::Node settings = root["settings"];
         const float node_radius = (settings && settings.IsMap() && settings["node_radius"]) ?
             settings["node_radius"].as<float>() : data.settings.node_radius;
+        const float default_label_angle = (settings && settings.IsMap() && settings["label_angle_degrees"]) ?
+            settings["label_angle_degrees"].as<float>() : data.settings.label_angle_degrees;
 
         for (size_t i = 0; i < node_list.size(); ++i) {
             const YAML::Node yaml_node = node_list[i];
@@ -246,8 +350,12 @@ bool load_network_yaml(const QString& path, NetworkData& out_data, QString& erro
 
             const QString maybe_name = scalar_to_qstring(map_child(yaml_node, "name"));
             node.name = maybe_name.isEmpty() ? node.label : maybe_name;
+            node.structure = scalar_to_qstring(map_child(yaml_node, "structure")).trimmed();
             node.fill_color = scalar_to_qstring(map_child(yaml_node, "fill_color")).trimmed();
             node.outline_color = scalar_to_qstring(map_child(yaml_node, "outline_color")).trimmed();
+            node.label_angle_degrees = map_child(yaml_node, "label_angle_degrees")
+                ? map_child(yaml_node, "label_angle_degrees").as<float>()
+                : default_label_angle;
 
             if (map_child(yaml_node, "position") && map_child(yaml_node, "position").IsMap() &&
                 map_child(map_child(yaml_node, "position"), "x") && map_child(map_child(yaml_node, "position"), "y")) {
@@ -280,6 +388,7 @@ bool load_network_yaml(const QString& path, NetworkData& out_data, QString& erro
             edge_data.to_index = to_it->second;
             edge_data.type = scalar_to_qstring(map_child(edge, "type")).trimmed();
             edge_data.description = scalar_to_qstring(map_child(edge, "name")).trimmed();
+            edge_data.structure = scalar_to_qstring(map_child(edge, "structure")).trimmed();
             edge_data.color = scalar_to_qstring(map_child(edge, "color")).trimmed();
 
             append_value_node(map_child(edge, "values"), edge_data.values);
@@ -357,8 +466,19 @@ bool load_network_yaml(const QString& path, NetworkData& out_data, QString& erro
     }
 }
 
-bool save_network_yaml(const QString& path, const NetworkData& data, QString& error) {
-    qInfo() << "Saving network YAML to" << path;
+/**
+ * @brief Convert network data structures into a YAML document string.
+ *
+ * The serializer emits nodes, pairwise edges, guide-node geometry, segment types, and view
+ * settings while applying effective fallback colors when per-element colors are empty. It
+ * skips edges that reference invalid node indices and reports emitter errors via `error`.
+ *
+ * @param data Source network data to serialize.
+ * @param yaml_text Output string that receives the generated YAML text on success.
+ * @param error Output string receiving serialization errors.
+ * @return True when YAML emission succeeds; false otherwise.
+ */
+bool network_yaml_to_string(const NetworkData& data, QString& yaml_text, QString& error) {
     try {
         YAML::Node root;
         YAML::Node nodes(YAML::NodeType::Sequence);
@@ -368,6 +488,9 @@ bool save_network_yaml(const QString& path, const NetworkData& data, QString& er
             if (!node.name.isEmpty() && node.name != node.label) {
                 node_yaml["name"] = node.name.toStdString();
             }
+            if (!node.structure.trimmed().isEmpty()) {
+                node_yaml["structure"] = node.structure.trimmed().toStdString();
+            }
             const QString effective_fill_color = node.fill_color.trimmed().isEmpty()
                 ? data.settings.node_fill_color
                 : node.fill_color.trimmed();
@@ -376,6 +499,7 @@ bool save_network_yaml(const QString& path, const NetworkData& data, QString& er
                 : node.outline_color.trimmed();
             node_yaml["fill_color"] = effective_fill_color.toStdString();
             node_yaml["outline_color"] = effective_outline_color.toStdString();
+            node_yaml["label_angle_degrees"] = node.label_angle_degrees;
             node_yaml["position"]["x"] = node.x;
             node_yaml["position"]["y"] = node.y;
             nodes.push_back(node_yaml);
@@ -399,6 +523,9 @@ bool save_network_yaml(const QString& path, const NetworkData& data, QString& er
             }
             if (!edge.description.trimmed().isEmpty()) {
                 edge_yaml["name"] = edge.description.toStdString();
+            }
+            if (!edge.structure.trimmed().isEmpty()) {
+                edge_yaml["structure"] = edge.structure.trimmed().toStdString();
             }
             const QString effective_edge_color = edge.color.trimmed().isEmpty()
                 ? data.settings.line_color
@@ -464,13 +591,42 @@ bool save_network_yaml(const QString& path, const NetworkData& data, QString& er
             return false;
         }
 
+        yaml_text = QString::fromUtf8(emitter.c_str());
+        return true;
+    } catch (const std::exception& ex) {
+        error = QString::fromUtf8(ex.what());
+        qWarning() << "Exception while serializing YAML" << error;
+        return false;
+    }
+}
+
+/**
+ * @brief Serialize network data to YAML and write it to a file path.
+ *
+ * This function first converts in-memory network structures to YAML text and then writes
+ * the result with truncation semantics. If file creation or serialization fails, it stores
+ * the failure reason in `error`.
+ *
+ * @param path Destination file path for the YAML document.
+ * @param data Network content to persist.
+ * @param error Output string receiving serialization or I/O errors.
+ * @return True when the file is written successfully; false otherwise.
+ */
+bool save_network_yaml(const QString& path, const NetworkData& data, QString& error) {
+    qInfo() << "Saving network YAML to" << path;
+    try {
+        QString yaml_text;
+        if (!network_yaml_to_string(data, yaml_text, error)) {
+            return false;
+        }
+
         std::ofstream out(path.toStdString(), std::ios::out | std::ios::trunc);
         if (!out.is_open()) {
             error = "Could not open file for writing.";
             return false;
         }
 
-        out << emitter.c_str();
+        out << yaml_text.toStdString();
         qInfo() << "Network saved";
         return true;
     } catch (const std::exception& ex) {

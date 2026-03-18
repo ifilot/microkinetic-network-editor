@@ -3,13 +3,13 @@
  *                                                                        *
  *   Author: Ivo Filot <ivo@ivofilot.nl>                                  *
  *                                                                        *
- *   MICROKINETIC NETWORK EDITOR is free software:                        *
+ *   MICROKINETIC NETWORK EDITOR (MNE) is free software:                  *
  *   you can redistribute it and/or modify it under the terms of the      *
  *   GNU General Public License as published by the Free Software         *
  *   Foundation, either version 3 of the License, or (at your option)     *
  *   any later version.                                                   *
  *                                                                        *
- *   MANAGLYPH is distributed in the hope that it will be useful,         *
+ *   MNE is distributed in the hope that it will be useful,               *
  *   but WITHOUT ANY WARRANTY; without even the implied warranty          *
  *   of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.              *
  *   See the GNU General Public License for more details.                 *
@@ -80,6 +80,9 @@ public:
 
     void set_label_angle_degrees(float degrees);
     float label_angle_degrees() const;
+    void set_selected_node_label_angle_degrees(float degrees);
+    float selected_node_label_angle_degrees() const;
+    void set_all_node_label_angles(float degrees);
 
     void set_node_label_distance(float distance);
     float node_label_distance() const;
@@ -95,6 +98,8 @@ public:
     bool has_node_selection() const;
     bool has_edge_selection() const;
     QString selected_node_name() const;
+    QString selected_node_structure() const;
+    QString selected_edge_structure() const;
     void set_selected_node_name(const QString& label);
     void reset_selected_node_name();
 
@@ -142,6 +147,8 @@ protected:
     void wheelEvent(QWheelEvent* event) override;
 
 private:
+    bool has_valid_node_selection() const;
+    bool has_valid_edge_selection() const;
     void draw_scene(QPainter& painter, const QRectF& world_visible_rect) const;
     QRectF scene_bounds() const;
     void fit_network_to_viewport();

@@ -36,6 +36,12 @@ cmake --build "${BUILD_DIR}"
 echo "==> Copying executable"
 cp "${BUILD_DIR}/${APP_NAME}.exe" "${DIST_DIR}/"
 
+# ------------------------------------------------------------
+# Copy examples directory (including subdirectories)
+# ------------------------------------------------------------
+echo "==> Copying examples directory"
+cp -r examples "${DIST_DIR}/examples"
+
 # Provide qmake.exe for windeployqt (MSYS2 requirement)
 QMAKE_QT5="$MINGW_PREFIX/bin/qmake-qt5.exe"
 QMAKE_SHIM="$MINGW_PREFIX/bin/qmake.exe"
